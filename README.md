@@ -26,6 +26,9 @@ for big images(larger than 300M), building overviews is highly recommended.
 - open the selected folder or a file
 - begin to draw or edit the polygon using toolbar buttons
 ![](https://github.com/enigma19971/RSLabel/blob/master/editing.PNG "polygon")
+- when **drawing**, you can use **right click** to revoke the last point
+- when **paning**, the **draw** and **edit** action are disabled.
+- when **drawing** or **editing**, you can press **CTRL** button and drag the mouse to pan
 
 ##	features
 -	Support 32bit and 16bit RS IMAGE. 
