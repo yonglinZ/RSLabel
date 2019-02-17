@@ -11,10 +11,11 @@ this project is based on PyQT5 , pygdal.   so the python3.6 env must be download
 you can using annaconda to download the python3.6 env and install PyQT5, gdal youself, and put it in the current folder
 ![Python Env](https://github.com/enigma19971/RSLabel/blob/master/python.PNG "like that")
 
-we provide a package that you can download and unzip to you folder
+we provide a package 
+
 [python](https://pan.baidu.com/s/1h4soOEfQGFiTA88H1b8yuw)
 
-now. you can the RSLabel.exe
+After you download and unzip to you folder. you can the RSLabel.exe
 
 
 ##	features
