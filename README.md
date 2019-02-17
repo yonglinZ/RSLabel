@@ -13,7 +13,7 @@ you can using annaconda to download the python3.6 env and install PyQT5, gdal yo
 
 we provide a package 
 
-[python](https://pan.baidu.com/s/1h4soOEfQGFiTA88H1b8yuw)
+[python3.6 + PyGdal + PyQT5](https://pan.baidu.com/s/1h4soOEfQGFiTA88H1b8yuw)
 
 After you download and unzip to you folder. you can the RSLabel.exe
 
