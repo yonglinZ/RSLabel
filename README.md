@@ -25,6 +25,7 @@ for big images(larger than 300M), building overviews is highly recommended.
   you can chose build overviews for single file or a folder
 - open the selected folder or a file
 - begin to draw or edit the polygon using toolbar buttons
+![](https://github.com/enigma19971/RSLabel/blob/master/editing.PNG "polygon")
 
 ##	features
 -	Support 32bit and 16bit RS IMAGE. 
