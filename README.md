@@ -24,11 +24,12 @@ After you download and unzip to you folder. you can the RSLabel.exe
 >	display single 16bit image with scalar remapping
 ![](https://github.com/enigma19971/RSLabel/blob/master/pseudo-colour.png "pseudo-colour")
 >	display single 16bit image with pseudo-colour
-
+-	Fully compatible with LabelMe operating methods and provide other utilities to do with remote sensing image.
+![](https://github.com/enigma19971/RSLabel/blob/master/labelme_utilities.png "labelme compatible")
 -	Support Very large RS IMAGE
 -	Supporting infinite zooming
 
-##	Next to download
+##	Next to do
 -	export the label result as coco/voc dataset formta
 -   support **geo** coordination and **image** coordination
 
