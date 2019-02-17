@@ -25,7 +25,7 @@ After you download and unzip to you folder. you can the RSLabel.exe
 ![](https://github.com/enigma19971/RSLabel/blob/master/pseudo-colour.png "pseudo-colour")
 >	display single 16bit image with pseudo-colour
 -	Fully compatible with LabelMe operating methods and provide other utilities to do with remote sensing image.
-![](https://github.com/enigma19971/RSLabel/blob/master/labelme_utilities.png "labelme compatible")
+![](https://github.com/enigma19971/RSLabel/blob/master/labelme_utilities.PNG "labelme compatible")
 -	Support Very large RS IMAGE
 -	Supporting infinite zooming
 
