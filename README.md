@@ -26,3 +26,7 @@ After you download and unzip to you folder. you can the RSLabel.exe
 ##	Next to download
 -	export the label result as coco/voc dataset formta
 -   support **geo** coordination and **image** coordination
+
+
+##	contact us
+weixin  714601476
