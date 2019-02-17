@@ -22,8 +22,9 @@ After you download and unzip to you folder. you can the RSLabel.exe
 -	Support 32bit and 16bit RS IMAGE. 
 ![](https://github.com/enigma19971/RSLabel/blob/master/16bit.PNG "scalar remap")
 >	display single 16bit image with scalar remapping
-![](https://www.mdeditor.com/images/logos/markdown.png "pseudo-colour;")
+![](https://github.com/enigma19971/RSLabel/blob/master/pseudo-colour "pseudo-colour")
 >	display single 16bit image with pseudo-colour
+
 -	Support Very large RS IMAGE
 -	Supporting infinite zooming
 
