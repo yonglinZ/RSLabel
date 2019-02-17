@@ -912,7 +912,7 @@ class LabelmePlugin:
         self.lastOpenDir = None
         self.labelList.setDragDropMode(QtWidgets.QAbstractItemView.InternalMove)
         self.labelList.setParent(self.mainWnd)
-        self.shape_dock = QtWidgets.QDockWidget('Polygon Labels', self.mainWnd)
+        self.shape_dock = QtWidgets.QDockWidget('多边形标签', self.mainWnd)
         self.shape_dock.setObjectName('Labels')
         self.shape_dock.setWidget(self.labelList)
         self.iface.addDockWidget(Qt.RightDockWidgetArea, self.shape_dock) #
@@ -925,7 +925,7 @@ class LabelmePlugin:
         if self._config['labels']:
             self.uniqLabelList.addItems(self._config['labels'])
             self.uniqLabelList.sortItems()
-        self.label_dock = QtWidgets.QDockWidget(u'Label List', self.mainWnd)
+        self.label_dock = QtWidgets.QDockWidget(u'标签列表', self.mainWnd)
         self.label_dock.setObjectName(u'Label List')
         self.label_dock.setWidget(self.uniqLabelList)
         self.iface.addDockWidget(Qt.RightDockWidgetArea, self.label_dock) #
@@ -942,7 +942,7 @@ class LabelmePlugin:
         fileListLayout.setSpacing(0)
         fileListLayout.addWidget(self.fileSearch)
         fileListLayout.addWidget(self.fileListWidget)
-        self.file_dock = QtWidgets.QDockWidget(u'File List', self.mainWnd)
+        self.file_dock = QtWidgets.QDockWidget(u'文件列表', self.mainWnd)
         self.file_dock.setObjectName(u'Files')
         fileListWidget = QtWidgets.QWidget()
         fileListWidget.setLayout(fileListLayout)
@@ -950,7 +950,7 @@ class LabelmePlugin:
         self.iface.addDockWidget(Qt.RightDockWidgetArea, self.file_dock) #*
 
         self.flag_dock = self.flag_widget = None
-        self.flag_dock = QtWidgets.QDockWidget('Flags', self.mainWnd)
+        self.flag_dock = QtWidgets.QDockWidget('标记', self.mainWnd)
         self.flag_dock.setObjectName('Flags')
         self.flag_widget = QtWidgets.QListWidget()
         if self._config['flags']:
