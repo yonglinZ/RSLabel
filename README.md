@@ -17,6 +17,8 @@ we provide a package
 
 After you download and unzip to you folder. you can the RSLabel.exe
 
+##  get started!
+todo
 
 ##	features
 -	Support 32bit and 16bit RS IMAGE. 
