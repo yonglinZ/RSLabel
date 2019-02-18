@@ -48,7 +48,7 @@ class LabelmePlugin:
         self.filename = None
         self.output_file = None
         self.output_dir = None
-        self.supportedFmts = ['img','tif','hdr', 'png', 'jpg', 'ecw', 'gta', 'pix', 'hdr']
+        self.supportedFmts = ['img','tif','tiff','hdr', 'png', 'jpg', 'ecw', 'gta', 'pix']
         self._noSelectionSlot = False
 
     def initGui(self):
@@ -414,7 +414,7 @@ class LabelmePlugin:
         path = osp.dirname(str(self.filename)) if self.filename else '.'
         #formats = ['*.{}'.format(fmt.data().decode())
                    #for fmt in QtGui.QImageReader.supportedImageFormats()]
-        formats = ['*.tif', '*.pix', '*.pci', '*.hdr', '*.img']
+        formats = ['*.tif', '*.tiff', '*.pix', '*.pci', '*.hdr', '*.img']
         filters = "Image & Label files (%s)" % ' '.join(
             formats + ['*%s' % LabelFile.suffix])
         filename = QtWidgets.QFileDialog.getOpenFileName(
@@ -747,10 +747,6 @@ class LabelmePlugin:
             if imageHandle is not None:
                 # the filename is image not JSON
                 self.imagePath = filename
-                '''
-                if QtGui.QImage.fromData(self.imageData).isNull():
-                    self.imageData = self.convertImageDataToPng(self.imageData)
-                '''
                 del imageHandle
                 self.labelFile = None
             else:
@@ -1500,6 +1496,7 @@ def read(filename):
             for bandIdx in np.arange(1, bandNum+1):
                 band = img.GetRasterBand(int(bandIdx))
                 stats = band.GetStatistics(0,1) #if no statistic , it will compute
+                print('*', stats)
     except Exception:
         print('*gdal read {}, failed'.format(filename))
         exstr = traceback.format_exc()
