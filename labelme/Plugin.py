@@ -1045,7 +1045,7 @@ class LabelmePlugin:
             '创建矩形',
             lambda: self.toggleDrawMode(False, createMode='rectangle'),
             shortcuts['create_rectangle'],
-            'objects',
+            'sel_rect_plus',
             'Start drawing rectangles',
             enabled=False,
         )
@@ -1246,6 +1246,7 @@ class LabelmePlugin:
             save,
             None,
             createMode,
+            createRectangleMode,
             editMode,
             copy,
             delete,

@@ -18,7 +18,17 @@ we provide a package
 After you download and unzip to you folder. you can the RSLabel.exe
 
 ##  get started!
-todo
+- build overviews for images.  
+for big images(larger than 300M), building overviews is highly recommended.  
+![](https://github.com/enigma19971/RSLabel/blob/master/build-overview.PNG "build overview")
+
+  you can chose build overviews for single file or a folder
+- open the selected folder or a file
+- begin to draw or edit the polygon using toolbar buttons
+![](https://github.com/enigma19971/RSLabel/blob/master/editing.PNG "polygon")
+- when **drawing**, you can use **right click** to revoke the last point
+- when **paning**, the **draw** and **edit** action are disabled.
+- when **drawing** or **editing**, you can press **CTRL** button and drag the mouse to pan
 
 ##	features
 -	Support 32bit and 16bit RS IMAGE. 
