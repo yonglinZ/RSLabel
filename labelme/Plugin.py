@@ -827,7 +827,7 @@ class LabelmePlugin:
         '''
 
     def tutorial(self):
-        url = 'https://github.com/wkentaro/labelme/tree/master/examples/tutorial'  # NOQA
+        url = 'https://github.com/enigma19971/RSLabel'  # NOQA
         webbrowser.open(url)
 
     def toggleAddPointEnabled(self, enabled):
@@ -1492,11 +1492,19 @@ def read(filename):
         print(metadata) # {'AREA_OR_POINT': 'Area'}
         print('\n')
         '''
+        isTiffType = filename.endswith('tiff')
         if (datatype != 1):
             bandNum = img.RasterCount
+            if isTiffType:
+                omd = filename[0:-4] + 'omd'
+                print('*the omd file is', omd)
+                omdf = open(omd, 'w')
+                omdf.write('number_bands:  {}\n\n'.format(bandNum))
             for bandIdx in np.arange(1, bandNum+1):
                 band = img.GetRasterBand(int(bandIdx))
                 stats = band.GetStatistics(0,1) #if no statistic , it will compute
+                omdf.write('band{}.min_value:  {}\n'.format(bandIdx, stats[0]))
+                omdf.write('band{}.max_value:  {}\n'.format(bandIdx, stats[1]))
                 print('*', stats)
     except Exception:
         print('*gdal read {}, failed'.format(filename))
