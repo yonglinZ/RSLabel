@@ -1,8 +1,5 @@
 [General]
 LastOpenedDirectory=D:\\warehouse\\data\\JIN\\JPD\x6d4b\x8bd5\\\x6c5f\x897f\x6d4b\x8bd5
 BuildPyramidDialog_FOLDER_OR_FILE=file
-<<<<<<< HEAD
-SelectedBands="0,2,3"
-=======
-SelectedBands="0,0,0"
->>>>>>> 134e1ee87b82a73bef2666f1e85c2d56f2ee8baa
+SelectedBands="2,1,0"
+="======"

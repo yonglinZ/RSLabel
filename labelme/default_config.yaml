@@ -38,6 +38,7 @@ fit_to_content:
   column: true
   row: false
 
+
 epsilon: 11.0
 
 shortcuts:
@@ -73,4 +74,5 @@ shortcuts:
   edit_label: Ctrl+E
   edit_line_color: Ctrl+L
   edit_fill_color: Ctrl+Shift+L
+  grid_size_color: Ctrl+G
   toggle_keep_prev_mode: Ctrl+P

@@ -1,5 +1,6 @@
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
+from PyQt5.uic import loadUi
 from .label_dialog import *
 from .tool_bar import *
 from .label_file import *
@@ -31,6 +32,8 @@ DEFAULT_VERTEX_FILL_COLOR = QtGui.QColor(0, 255, 0, 255)
 DEFAULT_HVERTEX_FILL_COLOR = QtGui.QColor(255, 0, 0)
 
 
+here = os.path.dirname(os.path.realpath(__file__))
+
 class LabelmePlugin:
     def __init__(self, iface):
         gdal.AllRegister()
@@ -39,9 +42,13 @@ class LabelmePlugin:
         self.canvas = iface.canvas()
         self.editor = iface.editor()
         self.menuBar = self.mainWnd.menuBar()
+        self.fileInfo_dock = self.iface.getInfoWidget()
         config = get_config()
         self._config = config
         self.colorDialog = ColorDialog(parent=self.mainWnd)
+        self.grid_color = None
+        self.grid_size = None 
+        print('*self.grid_size', self.grid_size)
 
         # Whether we need to save or not.
         self.dirty = False
@@ -1024,6 +1031,9 @@ class LabelmePlugin:
         color2 = action('多边形 &填充颜色', self.chooseColor2,
                         shortcuts['edit_fill_color'], 'color',
                         'Choose polygon fill color')
+        gridSzAndColor = action('网格 &尺寸颜色', self.setGridSizeAndColor,
+                        shortcuts['grid_size_color'], 'grid',
+                        'Choose grid color')
 
         toggle_keep_prev_mode = action(
             'Keep Previous Annotation',
@@ -1206,7 +1216,7 @@ class LabelmePlugin:
             fileMenuActions=(open_, opendir, save, saveAs, close, quit),
             tool=(),
             editMenu=(edit, copy, delete, None, undo, #undoLastPoint,
-                      None, color1, color2, None, toggle_keep_prev_mode),
+                      None, color1, color2, gridSzAndColor, None, toggle_keep_prev_mode),
             # menu shown at right click
             menu=(
                 createMode,
@@ -1284,6 +1294,7 @@ class LabelmePlugin:
             self.label_dock.toggleViewAction(),
             self.shape_dock.toggleViewAction(),
             self.file_dock.toggleViewAction(),
+            self.fileInfo_dock.toggleViewAction(),
             None,
             fill_drawing,
             None,
@@ -1410,6 +1421,7 @@ class LabelmePlugin:
             self._noSelectionSlot = True
             shape = self.labelList.get_shape_from_item(item)
             self.editor.selectShape(shape)
+            self.editor.moveToSelectedShape()
 
     def labelItemChanged(self, item):
         print('* labelItemChanged')
@@ -1459,6 +1471,35 @@ class LabelmePlugin:
             print('** editor is disabled from HOST')
         self.toggleActions(True)
 
+    def chooseGridColor(self):
+        color = self.colorDialog.getColor(
+                        self.fillColor, 'Choose fill color', default=DEFAULT_FILL_COLOR)
+        print('*',color)
+        self.grid_dialog.btnColor.setStyleSheet('background-color: rgb({}, {}, {});'.format(color.red(),color.green(),color.blue()))
+        self.grid_color = color
+
+    def setGridSizeAndColor(self):
+        self.grid_dialog = loadUi(here + '/GridSizeAndColorDialog.ui')
+        self.grid_dialog.setWindowIcon(labelme.utils.newIcon('grid'))
+        self.grid_dialog.btnColor.clicked.connect(self.chooseGridColor)
+        #show grid size from settings
+        self.grid_size = self.settings.value('grid_size')
+        if(self.grid_size is None):
+            self.grid_dialog.txtGridSize.setText('1024')
+        else:
+            self.grid_dialog.txtGridSize.setText('{}'.format(self.grid_size))
+        
+        ret = self.grid_dialog.exec()
+        if(ret == 1): #accept
+            self.grid_size = int(self.grid_dialog.txtGridSize.text())
+            print('* Grid size', self.grid_size)
+            if(self.grid_color is not None):
+                self.iface.setGridColor(self.grid_color)
+            self.iface.setGridSize(self.grid_size)
+            self.settings.setValue('grid_size', self.grid_dialog.txtGridSize.text())
+            self.settings.sync()
+
+
 
     def closeEvent(self):
         print('*^^^^^^^^^^^^^^^close')
@@ -1472,6 +1513,7 @@ class LabelmePlugin:
         self.settings.setValue('line/color', self.lineColor)
         self.settings.setValue('fill/color', self.fillColor)
         self.settings.setValue('recentFiles', self.recentFiles)
+        self.settings.sync()
         # ask the use for where to save the labels
         # self.settings.setValue('window/geometry', self.saveGeometry())
 ########################################################################################################
@@ -1494,7 +1536,9 @@ def read(filename):
         '''
         if (datatype != 1):
             bandNum = img.RasterCount
-            omd = filename[0:-3] + 'omd'
+            (filepath,tempfilename) = os.path.split(filename)
+            (shotname,extension) = os.path.splitext(tempfilename)
+            omd = filepath + '/' + shotname + '.omd'
             print('*the omd file is', omd)
             omdf = open(omd, 'w')
             omdf.write('number_bands:  {}\n\n'.format(bandNum))
