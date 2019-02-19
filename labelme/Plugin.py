@@ -1018,7 +1018,7 @@ class LabelmePlugin:
 
         close = action('&关闭', self.closeFile, shortcuts['close'], 'close',
                        'Close current file')
-        color1 = action('多边形 &线条 颜色', self.chooseColor1,
+        color1 = action('多边形 &线条颜色', self.chooseColor1,
                         shortcuts['edit_line_color'], 'color_line',
                         'Choose polygon line color')
         color2 = action('多边形 &填充颜色', self.chooseColor2,
@@ -1492,14 +1492,12 @@ def read(filename):
         print(metadata) # {'AREA_OR_POINT': 'Area'}
         print('\n')
         '''
-        isTiffType = filename.endswith('tiff')
         if (datatype != 1):
             bandNum = img.RasterCount
-            if isTiffType:
-                omd = filename[0:-4] + 'omd'
-                print('*the omd file is', omd)
-                omdf = open(omd, 'w')
-                omdf.write('number_bands:  {}\n\n'.format(bandNum))
+            omd = filename[0:-3] + 'omd'
+            print('*the omd file is', omd)
+            omdf = open(omd, 'w')
+            omdf.write('number_bands:  {}\n\n'.format(bandNum))
             for bandIdx in np.arange(1, bandNum+1):
                 band = img.GetRasterBand(int(bandIdx))
                 stats = band.GetStatistics(0,1) #if no statistic , it will compute
