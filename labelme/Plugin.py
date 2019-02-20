@@ -12,7 +12,12 @@ from .utils import fmtShortcut
 from .utils import newAction
 from .utils import newIcon
 from .color_dialog import *
+import webbrowser
+import glob
+import shutil
 import functools
+import lxml.builder
+import lxml.etree
 import os.path as osp
 import yaml
 import gdal
@@ -400,7 +405,7 @@ class LabelmePlugin:
     def openDirDialog(self, _value=False, dirpath=None):
         if not self.mayContinue():
             return
-
+        self.lastOpenDir = self.settings.value('lastOpenDir')
         defaultOpenDirPath = dirpath if dirpath else '.'
         if self.lastOpenDir and osp.exists(self.lastOpenDir):
             defaultOpenDirPath = self.lastOpenDir
@@ -413,24 +418,31 @@ class LabelmePlugin:
             QtWidgets.QFileDialog.ShowDirsOnly |
             QtWidgets.QFileDialog.DontResolveSymlinks))
         self.importDirImages(targetDirPath)
+        self.actions.exportAs.setEnabled(True)
+        self.lastOpenDir = targetDirPath
+        self.settings.setValue('lastOpenDir', self.lastOpenDir)
+        self.settings.sync()
 
     def openFile(self, _value=False):
         if not self.mayContinue():
             return
-        mainwnd = self.iface.mainWindow()
-        path = osp.dirname(str(self.filename)) if self.filename else '.'
+        lastOpenDir = self.settings.value('lastOpenDir')
+        path = osp.dirname(str(self.filename)) if self.filename else lastOpenDir 
         #formats = ['*.{}'.format(fmt.data().decode())
                    #for fmt in QtGui.QImageReader.supportedImageFormats()]
         formats = ['*.tif', '*.tiff', '*.pix', '*.pci', '*.hdr', '*.img']
         filters = "Image & Label files (%s)" % ' '.join(
             formats + ['*%s' % LabelFile.suffix])
         filename = QtWidgets.QFileDialog.getOpenFileName(
-            mainwnd, '%s - Choose Image or Label file' % __appname__,
+            self.mainWnd, '%s - Choose Image or Label file' % __appname__,
             path, filters)
         filename, _ = filename
         filename = str(filename)
         if filename:
             self.loadFile(filename)
+            basename = osp.splitext(filename)[0]
+            self.settings.setValue('lastOpenDir', basename)
+
 
     def openPrevImg(self, _value=False):
         keep_prev = self._config['keep_prev']
@@ -573,7 +585,7 @@ class LabelmePlugin:
             default_output_dir = self.currentPath()
 
         output_dir = QtWidgets.QFileDialog.getExistingDirectory(
-            self, '%s - Save/Load Annotations in Directory' % __appname__,
+            self.mainWnd, '%s - Save/Load Annotations in Directory' % __appname__,
             default_output_dir,
             QtWidgets.QFileDialog.ShowDirsOnly |
             QtWidgets.QFileDialog.DontResolveSymlinks,
@@ -1002,9 +1014,9 @@ class LabelmePlugin:
         saveAs = action('&另存为', self.saveFileAs, shortcuts['save_as'],
                         'save-as', 'Save labels to a different file',
                         enabled=False)
-        #exportAs = action('&导出为', self.exportAs, shortcuts['export_as'],
-        #                'export-as', 'export labels to a different dataset format',
-        #                enabled=False)
+        exportAs = action('&导出为', self.exportAs, shortcuts['export_as'],
+                        'export', 'export labels to a coco/voc dataset format',
+                        enabled=False)
         changeOutputDir = action(
             '&改变输出目录',
             slot=self.changeOutputDirDialog,
@@ -1121,48 +1133,6 @@ class LabelmePlugin:
         help = action('&教程', self.tutorial, icon='help',
                       tip='Show tutorial page')
 
-        ''' *
-        zoom = QtWidgets.QWidgetAction(self)
-        zoom.setDefaultWidget(self.zoomWidget)
-        self.zoomWidget.setWhatsThis(
-            "Zoom in or out of the image. Also accessible with"
-            " %s and %s from the canvas." %
-            (fmtShortcut('%s,%s' % (shortcuts['zoom_in'],
-                                    shortcuts['zoom_out'])),
-             fmtShortcut("Ctrl+Wheel")))
-        self.zoomWidget.setEnabled(False)
-
-        zoomIn = action('Zoom &In', functools.partial(self.addZoom, 10),
-                        shortcuts['zoom_in'], 'zoom-in',
-                        'Increase zoom level', enabled=False)
-        zoomOut = action('&Zoom Out', functools.partial(self.addZoom, -10),
-                         shortcuts['zoom_out'], 'zoom-out',
-                         'Decrease zoom level', enabled=False)
-        zoomOrg = action('&Original size',
-                         functools.partial(self.setZoom, 100),
-                         shortcuts['zoom_to_original'], 'zoom',
-                         'Zoom to original size', enabled=False)
-        fitWindow = action('&Fit Window', self.setFitWindow,
-                           shortcuts['fit_window'], 'fit-window',
-                           'Zoom follows window size', checkable=True,
-                           enabled=False)
-        fitWidth = action('Fit &Width', self.setFitWidth,
-                          shortcuts['fit_width'], 'fit-width',
-                          'Zoom follows window width',
-                          checkable=True, enabled=False)
-        # Group zoom controls into a list for easier toggling.
-        zoomActions = (self.zoomWidget, zoomIn, zoomOut, zoomOrg,
-                       fitWindow, fitWidth)
-        self.zoomMode = self.FIT_WINDOW
-        fitWindow.setChecked(Qt.Checked)
-        self.scalers = {
-            self.FIT_WINDOW: self.scaleFitWindow,
-            self.FIT_WIDTH: self.scaleFitWidth,
-            # Set to one to scale to 100% when loading files.
-            self.MANUAL_ZOOM: lambda: 1,
-        }
-        '''
-
         edit = action('&编辑标记', self.editLabel, shortcuts['edit_label'],
                       'edit', 'Modify the label of the selected polygon',
                       enabled=False)
@@ -1197,6 +1167,7 @@ class LabelmePlugin:
             saveAuto=saveAuto,
             changeOutputDir=changeOutputDir,
             save=save, saveAs=saveAs, open=open_, close=close,
+            exportAs=exportAs,
             lineColor=color1, fillColor=color2,
             toggleKeepPrevMode=toggle_keep_prev_mode,
             delete=delete, edit=edit, copy=copy,
@@ -1209,11 +1180,8 @@ class LabelmePlugin:
             createPointMode=createPointMode,
             createLineStripMode=createLineStripMode,
             shapeLineColor=shapeLineColor, shapeFillColor=shapeFillColor,
-            # zoom=zoom, zoomIn=zoomIn, zoomOut=zoomOut, zoomOrg=zoomOrg, *
-            # fitWindow=fitWindow, fitWidth=fitWidth,
-            # zoomActions=zoomActions,
             openNextImg=openNextImg, openPrevImg=openPrevImg,
-            fileMenuActions=(open_, opendir, save, saveAs, close, quit),
+            fileMenuActions=(open_, opendir, save, saveAs, exportAs, close, quit),
             tool=(),
             editMenu=(edit, copy, delete, None, undo, #undoLastPoint,
                       None, color1, color2, gridSzAndColor, None, toggle_keep_prev_mode),
@@ -1262,11 +1230,6 @@ class LabelmePlugin:
             delete,
             undo,
             None,
-            #zoomIn, *
-            #zoom,
-            #zoomOut,
-            #fitWindow,
-            #fitWidth,
         )
         # Custom context menu for the canvas widget:
         addActions(self.canvasMenus[0], self.actions.menu)
@@ -1285,6 +1248,7 @@ class LabelmePlugin:
         addActions(self.menus.file, (open_, openNextImg, openPrevImg, opendir,
                                      self.menus.recentFiles,
                                      save, saveAs, saveAuto, changeOutputDir,
+                                     exportAs,
                                      close,
                                      None,
                                      quit))
@@ -1336,7 +1300,7 @@ class LabelmePlugin:
     ########################################################################################################
     def errorMessage(self, title, message):
         return QtWidgets.QMessageBox.critical(
-            self, title, '<p><b>%s</b></p>%s' % (title, message))
+            self.mainWnd, title, '<p><b>%s</b></p>%s' % (title, message))
     
     def statusBar(self):
         return self.mainWnd.statusBar()
@@ -1499,7 +1463,7 @@ class LabelmePlugin:
             self.settings.setValue('grid_size', self.grid_dialog.txtGridSize.text())
             self.settings.sync()
 
-
+    
 
     def closeEvent(self):
         print('*^^^^^^^^^^^^^^^close')
@@ -1517,6 +1481,156 @@ class LabelmePlugin:
         # ask the use for where to save the labels
         # self.settings.setValue('window/geometry', self.saveGeometry())
 ########################################################################################################
+#                                         EXPORT
+########################################################################################################
+
+    def exportAs(self):
+            self.export_dialog = loadUi(here + '/ExportAsVocDialog.ui')
+            self.export_dialog.setWindowIcon(labelme.utils.newIcon('export'))
+            self.export_dialog.btnOutDir.clicked.connect(self.selectExportDir)
+            self.export_dialog.txtOutDir.setText(osp.join(self.lastOpenDir, 'voc'))
+            if(self.export_dialog.exec() == 1):
+                self.exportVOC()
+
+    def selectExportDir(self):
+        targetDirPath = str(QtWidgets.QFileDialog.getExistingDirectory(
+            self.mainWnd, '%s - Open Directory' % __appname__, '.',
+            QtWidgets.QFileDialog.ShowDirsOnly |
+            QtWidgets.QFileDialog.DontResolveSymlinks))
+        self.export_dialog.txtOutDir.setText(targetDirPath)
+        self.exportOutDir = targetDirPath
+    
+    def exportVOC(self):
+        '''
+        if os.listdir(self.exportOutDir):
+            self.errorMessage(
+                '该目录非空',
+                '必须选择一个新的文件夹.')
+        '''
+        self.exportOutDir = self.export_dialog.txtOutDir.text()
+        if not osp.exists(self.exportOutDir):
+            os.makedirs(self.exportOutDir)
+        if not osp.exists(osp.join(self.exportOutDir, 'JPEGImages')):
+            os.makedirs(osp.join(self.exportOutDir, 'JPEGImages'))
+        if not osp.exists(osp.join(self.exportOutDir, 'Annotations')):
+            os.makedirs(osp.join(self.exportOutDir, 'Annotations'))
+        if not osp.exists(osp.join(self.exportOutDir, 'AnnotationsVisualization')):
+            os.makedirs(osp.join(self.exportOutDir, 'AnnotationsVisualization'))
+        print('*Creating dataset:', self.exportOutDir)
+
+        class_names = []
+        class_name_to_id = {}
+        labels_file = osp.join(here, 'labels.txt')
+        print('*labels file:',labels_file)
+        ''' 
+        for i, line in enumerate(open(labels_file).readlines()):
+            class_id = i - 1  # starts with -1
+            class_name = line.strip()
+            class_name_to_id[class_name] = class_id
+            if class_id == -1:
+                assert class_name == '__ignore__'
+                continue
+            elif class_id == 0:
+                assert class_name == '_background_'
+            class_names.append(class_name)
+        class_names = tuple(class_names)
+        print('class_names:', class_names)
+        out_class_names_file = osp.join(self.exportOutDir, 'class_names.txt')
+        with open(out_class_names_file, 'w') as f:
+            f.writelines('\n'.join(class_names))
+        print('Saved class_names:', out_class_names_file)
+        '''
+        allJson = glob.glob(osp.join(self.lastOpenDir, '*.json'))
+        jsonNum = len(allJson)
+        for i, label_file in enumerate(allJson):
+            print('Generating dataset from:', label_file)
+            with open(label_file) as f:
+                data = json.load(f)  #data is json file's content
+            base = osp.splitext(osp.basename(label_file))[0]
+            out_img_file = osp.join(
+                self.exportOutDir, 'JPEGImages', base + '.tif')
+            out_xml_file = osp.join(
+                self.exportOutDir, 'Annotations', base + '.xml')
+            out_viz_file = osp.join(
+                self.exportOutDir, 'AnnotationsVisualization', base + '.tif')
+
+            img_file = osp.join(osp.dirname(label_file), data['imagePath'])
+            print('*export ',img_file)
+            print('* to ', out_img_file)
+            shape = gdalCopy(img_file, out_img_file)
+            maker = lxml.builder.ElementMaker()
+            xml = maker.annotation(
+                maker.folder(),
+                maker.filename(base + '.tif'),
+                maker.database(),    # e.g., The VOC2007 Database
+                maker.annotation(),  # e.g., Pascal VOC2007
+                maker.image(),       # e.g., flickr
+                maker.size(
+                    maker.height(str(shape[0])),
+                    maker.width(str(shape[1])),
+                    maker.depth(str(shape[2])),
+                ),
+                maker.segmented(),
+            )
+            print('*size: width {}, height {}, raster {}'.format(shape[0],shape[1],shape[2]))
+            bboxes = []
+            labels = []
+            for shape in data['shapes']:
+                if shape['shape_type'] != 'rectangle':
+                    print('Skipping shape: label={label}, shape_type={shape_type}'
+                        .format(**shape))
+                    continue
+
+                class_name = shape['label']
+                print('*class_name', class_name)
+                #class_id = class_names.index(class_name)
+
+                (xmin, ymin), (xmax, ymax) = shape['points']
+                #convert to image coordination here
+                ul = QPointF(xmin,ymin)
+                qpoint_ul = self.iface.map2Image(ul)
+                lr = QPoint(xmax, ymax)
+                qpoint_lr = self.iface.map2Image(lr)
+                print('\n\n\n*@|@ {},{}-{},{}'.format(qpoint_ul.x(),qpoint_ul.y(),qpoint_lr.x(),qpoint_lr.y()))
+                bboxes.append([qpoint_ul.x(),qpoint_ul.y(),qpoint_lr.x(),qpoint_lr.y()])
+                xmin = qpoint_ul.x()
+                ymin = qpoint_ul.y()
+                xmax = qpoint_lr.x()
+                ymax = qpoint_lr.y()
+                #bboxes.append([xmin, ymin, xmax, ymax])
+                #labels.append(class_id)
+
+                xml.append(
+                    maker.object(
+                        maker.name(shape['label']),
+                        maker.pose(),
+                        maker.truncated(),
+                        maker.difficult(),
+                        maker.bndbox(
+                            maker.xmin(str(xmin)),
+                            maker.ymin(str(ymin)),
+                            maker.xmax(str(xmax)),
+                            maker.ymax(str(ymax)),
+                        ),
+                    )
+                )
+            '''
+            captions = [class_names[l] for l in labels]
+            viz = labelme.utils.draw_instances(
+                img, bboxes, labels, captions=captions
+            )
+            PIL.Image.fromarray(viz).save(out_viz_file)
+            '''
+            with open(out_xml_file, 'wb') as f:
+                f.write(lxml.etree.tostring(xml, pretty_print=True))
+            self.iface.setProgress((int)((i+1)*100.0/jsonNum))
+
+        mb = QtWidgets.QMessageBox
+        msg = '导出数据完成'
+        answer = mb.information(self.mainWnd,
+                             '成功',
+                             msg)
+########################################################################################################
 #                                          GDAL                                        
 ########################################################################################################
 import numpy as np
@@ -1524,6 +1638,9 @@ def read(filename):
     img = None
     try:
         img = gdal.Open(filename)
+        if(img is None):
+            return None
+
         datatype = img.GetRasterBand(1).DataType
         print('* datatype', datatype) 
         '''
@@ -1554,3 +1671,15 @@ def read(filename):
         print (exstr)
     return img 
         
+def gdalCopy(src_filename, dst_filename):
+    src_ds = gdal.Open( src_filename )
+    #Open output format driver, see gdal_translate --formats for list
+    format = "GTiff"
+    driver = gdal.GetDriverByName( format )
+    #Output to new format
+    dst_ds = driver.CreateCopy( dst_filename, src_ds, 0 )
+    w, h, d = src_ds.RasterXSize, src_ds.RasterYSize, src_ds.RasterCount
+    #Properly close the datasets to flush to disk
+    dst_ds = None
+    src_ds = None
+    return w,h,d
