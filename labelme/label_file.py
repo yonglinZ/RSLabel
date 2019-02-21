@@ -106,11 +106,13 @@ class LabelFile(object):
         otherData=None,
         flags=None,
     ):
+        '''
         if imageData is not None:
             imageData = base64.b64encode(imageData).decode('utf-8')
             imageHeight, imageWidth = self._check_image_height_and_width(
                 imageData, imageHeight, imageWidth
             )
+        '''
         if otherData is None:
             otherData = {}
         if flags is None:

@@ -13,7 +13,7 @@ from .utils import newAction
 from .utils import newIcon
 from .color_dialog import *
 import webbrowser
-import glob
+import glob 
 import shutil
 import functools
 import lxml.builder
@@ -21,6 +21,7 @@ import lxml.etree
 import os.path as osp
 import yaml
 import gdal
+import math
 from . import get_config
 from rslabel.gui import qtMouseListener
 from rslabel.gui import LabelmeEditor
@@ -60,9 +61,11 @@ class LabelmePlugin:
         self.filename = None
         self.output_file = None
         self.output_dir = None
-        self.supportedFmts = ['img','tif','tiff','hdr', 'png', 'jpg', 'ecw', 'gta', 'pix']
+        self.supportedFmts = ['img','tif','tiff','png', 'jpg', 'ecw', 'gta', 'pix']
         self._noSelectionSlot = False
 
+        self.imageWidth = 0
+        self.imageHeight = 0
     def initGui(self):
         """Function initalizes GUI of the OSM Plugin.
         """
@@ -287,9 +290,6 @@ class LabelmePlugin:
             print('*',type(label))
             print('*',type(shape_type))
             print('* label',label)
-            print('* shape type', shape_type)
-            print('* line color', line_color)
-            print('* fill color', fill_color)
             shape = LabelmeShape(label, shape_type)
             for x, y in points:
                 print('*({},{})'.format(x,y))
@@ -343,13 +343,14 @@ class LabelmePlugin:
                 shapes=shapes,
                 imagePath=imagePath,
                 imageData=imageData,
-                imageHeight=self.image.height(),
-                imageWidth=self.image.width(),
+                imageHeight=self.imageHeight,
+                imageWidth=self.imageWidth,
                 lineColor=self.lineColor.getRgb(),
                 fillColor=self.fillColor.getRgb(),
                 otherData=self.otherData,
                 flags=flags,
             )
+            print('* save label, imageWidth is {}'.format(self.imageWidth))
             self.labelFile = lf
             items = self.fileListWidget.findItems(
                 self.imagePath, Qt.MatchExactly
@@ -430,7 +431,7 @@ class LabelmePlugin:
         path = osp.dirname(str(self.filename)) if self.filename else lastOpenDir 
         #formats = ['*.{}'.format(fmt.data().decode())
                    #for fmt in QtGui.QImageReader.supportedImageFormats()]
-        formats = ['*.tif', '*.tiff', '*.pix', '*.pci', '*.hdr', '*.img']
+        formats = ['*.tif', '*.tiff', '*.pix', '*.pci', '*.img']
         filters = "Image & Label files (%s)" % ' '.join(
             formats + ['*%s' % LabelFile.suffix])
         filename = QtWidgets.QFileDialog.getOpenFileName(
@@ -717,7 +718,7 @@ class LabelmePlugin:
     def loadFile(self, filename=None):
         """Load the specified file, or the last opened file if None."""
         # changing fileListWidget loads file
-        print('*\n\n\n-------------------------------------load a new file --------------------------------------------')
+        print('\n\n\n*-------------------------------------load a new file --------------------------------------------')
         if (filename in self.imageList and
                 self.fileListWidget.currentRow() !=
                 self.imageList.index(filename)):
@@ -745,11 +746,11 @@ class LabelmePlugin:
                 self.labelFile = LabelFile(label_file)
             except LabelFileError as e:
                 self.errorMessage(
-                    'Error opening file',
+                    '打开文件时发生错误',
                     "<p><b>%s</b></p>"
-                    "<p>Make sure <i>%s</i> is a valid label file."
+                    "<p>确保 <i>%s</i> 是有效的标记文件"
                     % (e, label_file))
-                self.status("Error reading %s" % label_file)
+                self.status("读文件错误 %s" % label_file)
                 return False
             self.imagePath = osp.join(
                 osp.dirname(label_file),
@@ -766,6 +767,8 @@ class LabelmePlugin:
             if imageHandle is not None:
                 # the filename is image not JSON
                 self.imagePath = filename
+                self.imageWidth = imageHandle.RasterXSize
+                self.imageHeight = imageHandle.RasterYSize
                 del imageHandle
                 self.labelFile = None
             else:
@@ -1488,9 +1491,24 @@ class LabelmePlugin:
             self.export_dialog = loadUi(here + '/ExportAsVocDialog.ui')
             self.export_dialog.setWindowIcon(labelme.utils.newIcon('export'))
             self.export_dialog.btnOutDir.clicked.connect(self.selectExportDir)
-            self.export_dialog.txtOutDir.setText(osp.join(self.lastOpenDir, 'voc'))
+            export_dir = self.settings.value('export_dir')
+            if(export_dir is not None):
+                self.export_dialog.txtOutDir.setText(export_dir)
+            else:
+                ho = QDir.home().absolutePath()
+                self.export_dialog.txtOutDir.setText(osp.join(ho,'voc'))
+            tiled = self.settings.value('export_tiled')
+            tileSize = self.settings.value('export_tile_size')
+            if(tiled):
+                self.export_dialog.chkTiled.setChecked(True)
+                self.export_dialog.txtTileSize.setEnabled(True)
+            if(tileSize):
+                self.export_dialog.txtTileSize.setText(str(tileSize))
+            else:
+                self.export_dialog.txtTileSize.setText(str(1000))
+            print('* export tile size', tileSize)
             if(self.export_dialog.exec() == 1):
-                self.exportVOC()
+                self.export()
 
     def selectExportDir(self):
         targetDirPath = str(QtWidgets.QFileDialog.getExistingDirectory(
@@ -1499,7 +1517,96 @@ class LabelmePlugin:
             QtWidgets.QFileDialog.DontResolveSymlinks))
         self.export_dialog.txtOutDir.setText(targetDirPath)
         self.exportOutDir = targetDirPath
-    
+
+    def splitFile(self):
+        jsons = glob.glob(self.lastOpenDir + '/**/*.json', recursive=True)
+        jsonNum = len(jsons)
+        for i, label_file in enumerate(jsons):
+            base = osp.splitext(osp.basename(label_file))[0]
+            filePathWithoutExt = osp.splitext(label_file)[0]
+            exts = ['.tif', '.env', '.pix', '.img', '.tiff', '.ecw', '.tga']
+            e = '.tif'
+            findImg = False
+            for ext in exts:
+                img_file = filePathWithoutExt + ext
+                print('*', img_file)
+                if(osp.exists(img_file)):
+                    findImg = True
+                    e = ext
+                    break
+            if (findImg):
+                tileSz = int(self.export_dialog.txtTileSize.text())      
+                outDir = self.export_dialog.txtOutDir.text()
+                outDir = osp.join(outDir , 'tiles', base)
+                if(not osp.exists(outDir)):
+                    os.makedirs(outDir)            
+                self.statusBar().showMessage('正在处理 %s' % img_file)
+                #self.iface.gdal2Tile(img_file,tileSz, outDir)
+                #load json
+                print('* @|@ begin to load json', label_file)
+                print('* @|@ points', type(s['points']))
+                with open(label_file) as f:
+                    data = json.load(f)  #data is json file's content
+                    shapes = (
+                        dict(
+                        label = s['label'],
+                        points = s['points'],
+                        line_color = s['line_color'],
+                        fill_color = s['fill_color'],
+                        shape_type = s.get('shape_type', 'polygon'),
+                        )
+                        for s in data['shapes']
+                    )
+                    flags = data.get('flags')
+                    imagePath = data['imagePath']
+                    lineColor = data['lineColor']
+                    fillColor = data['fillColor']
+                    imageHeight = data['imageHeight']
+                    imageWidth = data['imageWidth']
+                    flags = data['flags']
+                    otherData = None
+                    tile_x_count = math.ceil(imageWidth/tileSz)
+                    tile_y_count = math.ceil(imageHeight/tileSz)
+                    print('* @|@ json load, image width is {}, image height is {}, tile_x_count is {}, tile_y_count is {}'.format(imageWidth, imageHeight, tile_x_count,tile_y_count))
+                    for row in range(tile_y_count):
+                        for col in range(tile_x_count):
+                            if(col == (tile_x_count -1)):
+                                iw = imageWidth - col * tileSz
+                            else:
+                                iw = tileSz
+                            if(row == (tile_y_count -1)):
+                                ih = imageHeight - row * tileSz
+                            else:
+                                ih = tileSz
+                            label_file_t = osp.join(outDir, '{}_{}_{}.{}'.format(base, row, col, 'json'))
+                            print('* @|@ label_file_t', label_file_t)
+                            lf = LabelFile()
+                            lf.save(
+                                filename=label_file_t,
+                                shapes=shapes,
+                                imagePath='Test',
+                                imageData=None,
+                                imageHeight=ih,
+                                imageWidth=iw,
+                                lineColor=lineColor,
+                                fillColor=fillColor,
+                                otherData=otherData,
+                                flags=flags,
+                            )
+
+        self.statusBar().showMessage('处理完毕')
+        mb = QtWidgets.QMessageBox
+        msg = '导出数据完成'
+        answer = mb.information(self.mainWnd, '成功', msg)
+
+
+    def export(self):
+        if(self.export_dialog.chkTiled.isChecked()):  #need to split to tiles
+            self.splitFile()
+        else:
+            self.exportVOC()
+          
+
     def exportVOC(self):
         '''
         if os.listdir(self.exportOutDir):
@@ -1540,10 +1647,11 @@ class LabelmePlugin:
             f.writelines('\n'.join(class_names))
         print('Saved class_names:', out_class_names_file)
         '''
-        allJson = glob.glob(osp.join(self.lastOpenDir, '*.json'))
-        jsonNum = len(allJson)
-        for i, label_file in enumerate(allJson):
-            print('Generating dataset from:', label_file)
+        jsons = glob.glob(self.lastOpenDir + '/**/*.json', recursive=True)
+        print(jsons)
+        jsonNum = len(jsons)
+        for i, label_file in enumerate(jsons):
+            print('* @|@Generating dataset from:', label_file)
             with open(label_file) as f:
                 data = json.load(f)  #data is json file's content
             base = osp.splitext(osp.basename(label_file))[0]
@@ -1624,7 +1732,11 @@ class LabelmePlugin:
             with open(out_xml_file, 'wb') as f:
                 f.write(lxml.etree.tostring(xml, pretty_print=True))
             self.iface.setProgress((int)((i+1)*100.0/jsonNum))
+            i = i + 1
 
+        self.settings.setValue('export_tile_size', self.export_dialog.txtTileSize.text())
+        self.settings.setValue('export_tiled', self.export_dialog.chkTiled.isEnabled())
+        self.settings.sync()
         mb = QtWidgets.QMessageBox
         msg = '导出数据完成'
         answer = mb.information(self.mainWnd,
@@ -1642,7 +1754,7 @@ def read(filename):
             return None
 
         datatype = img.GetRasterBand(1).DataType
-        print('* datatype', datatype) 
+        print('* @|@ read file, datatype', datatype) 
         '''
         desc = img.GetDescription()
         metadata = img.GetMetadata() #
@@ -1657,29 +1769,35 @@ def read(filename):
             (shotname,extension) = os.path.splitext(tempfilename)
             omd = filepath + '/' + shotname + '.omd'
             print('*the omd file is', omd)
-            omdf = open(omd, 'w')
-            omdf.write('number_bands:  {}\n\n'.format(bandNum))
+            hasOmd = False
+            if osp.exists(omd):
+                hasOmd = True
+            else:
+                omdf = open(omd, 'w')
+                omdf.write('number_bands:  {}\n\n'.format(bandNum))
             for bandIdx in np.arange(1, bandNum+1):
                 band = img.GetRasterBand(int(bandIdx))
                 stats = band.GetStatistics(0,1) #if no statistic , it will compute
-                omdf.write('band{}.min_value:  {}\n'.format(bandIdx, stats[0]))
-                omdf.write('band{}.max_value:  {}\n'.format(bandIdx, stats[1]))
+                if(not hasOmd):
+                    omdf.write('band{}.min_value:  {}\n'.format(bandIdx, stats[0]))
+                    omdf.write('band{}.max_value:  {}\n'.format(bandIdx, stats[1]))
                 print('*', stats)
     except Exception:
         print('*gdal read {}, failed'.format(filename))
         exstr = traceback.format_exc()
         print (exstr)
-    return img 
+    return img
         
 def gdalCopy(src_filename, dst_filename):
     src_ds = gdal.Open( src_filename )
     #Open output format driver, see gdal_translate --formats for list
-    format = "GTiff"
-    driver = gdal.GetDriverByName( format )
+    #format = "GTiff"
+    #driver = gdal.GetDriverByName( format )
     #Output to new format
-    dst_ds = driver.CreateCopy( dst_filename, src_ds, 0 )
+    #dst_ds = driver.CreateCopy( dst_filename, src_ds, 0 )
     w, h, d = src_ds.RasterXSize, src_ds.RasterYSize, src_ds.RasterCount
     #Properly close the datasets to flush to disk
-    dst_ds = None
+    #dst_ds = None
     src_ds = None
+    shutil.copy(src_filename, dst_filename)
     return w,h,d
