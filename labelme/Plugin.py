@@ -4,6 +4,7 @@ from PyQt5.uic import loadUi
 from .label_dialog import *
 from .tool_bar import *
 from .label_file import *
+from .labelme2COCO import *
 from .label_qlist_widget import *
 from .escapable_qlist_widget import *
 from .utils import struct
@@ -1522,6 +1523,15 @@ class LabelmePlugin:
         # to display the image
         if(len(self.imageList) <= 1):
             return
+        mb = QtWidgets.QMessageBox
+        msg = '显示所有功能，只针对已经配准好的图像集, 确定需要显示所有图层吗?'
+        answer = mb.question(self.mainWnd,
+                             '继续显示?',
+                             msg,
+                             mb.Yes | mb.Cancel,
+                             mb.Cancel)
+        if answer == mb.Cancel:
+            return 
         if (e):
             self.editor.clearShapes()
             self.iface.reset() 
@@ -1552,7 +1562,8 @@ class LabelmePlugin:
                 self.export_dialog.txtOutDir.setText(export_dir)
             else:
                 ho = QDir.home().absolutePath()
-                self.export_dialog.txtOutDir.setText(osp.join(ho,'voc'))
+                outdir = osp.join(ho,'rslabel')
+                self.export_dialog.txtOutDir.setText(outdir.replace('/','\\'))
             tiled = self.settings.value('export_tiled')
             tileSize = self.settings.value('export_tile_size')
             if(tiled):
@@ -1562,9 +1573,17 @@ class LabelmePlugin:
                 self.export_dialog.txtTileSize.setText(str(tileSize))
             else:
                 self.export_dialog.txtTileSize.setText(str(1000))
-            print('* export tile size', tileSize)
+            if not self.mayContinue():
+                return
             if(self.export_dialog.exec() == 1):
                 self.export()
+            #save the settings
+            self.settings.setValue('export_tile_size', self.export_dialog.txtTileSize.text())
+            self.settings.setValue('export_tiled', self.export_dialog.chkTiled.isEnabled())
+            self.settings.setValue('export_dir', self.export_dialog.txtOutDir.text())
+            self.settings.sync()
+            self.statusBar().showMessage('导出数据集成功')
+
 
     def selectExportDir(self):
         targetDirPath = str(QtWidgets.QFileDialog.getExistingDirectory(
@@ -1634,7 +1653,6 @@ class LabelmePlugin:
                     print('* @|@json load, image width is {}, image height is {}, tile_x_count is {}, tile_y_count is {}'.format(imageWidth, imageHeight, tile_x_count,tile_y_count))
                     for row in range(tile_y_count):
                         for col in range(tile_x_count):
-                            print('*tile({},{})'.format(row, col))
                             if(col == (tile_x_count -1)):
                                 iw = imageWidth - col * tileSz
                             else:
@@ -1740,16 +1758,18 @@ class LabelmePlugin:
             if(answer == mb.Yes):
                 try:
                     #shutil.rmtree(self.exportOutDir,ignore_errors=True)
-                    os.system('rd ' + self.exportOutDir + '/s /q')
+                    outdir = self.exportOutDir.replace('/', '\\')
+                    os.system('rd /s /q ' + outdir)
                 except Exception as e:
                     print('*repr(e):\t', repr(e) )
                     print('* ^|^ remove file failed')
-        try:
-            os.makedirs(osp.join(self.exportOutDir, 'JPEGImages'))
-            os.makedirs(osp.join(self.exportOutDir, 'Annotations'))
-            os.makedirs(osp.join(self.exportOutDir, 'AnnotationsVisualization'))
-        except Exception:
-            print('*Creating dataset failed:', self.exportOutDir)
+        if(self.export_dialog.radVOC.isChecked()):
+            try:
+                os.makedirs(osp.join(self.exportOutDir, 'JPEGImages'))
+                os.makedirs(osp.join(self.exportOutDir, 'Annotations'))
+                os.makedirs(osp.join(self.exportOutDir, 'AnnotationsVisualization'))
+            except Exception:
+                print('*Creating dataset failed:', self.exportOutDir)
 
         self.isTiled = False
         if(self.export_dialog.chkTiled.isChecked()):  #need to split to tiles
@@ -1777,22 +1797,20 @@ class LabelmePlugin:
             self.exportAsVOC(dir)
         else:
             self.exportAsCOCO(dir)
-        #save the settings
-        self.settings.setValue('export_tile_size', self.export_dialog.txtTileSize.text())
-        self.settings.setValue('export_tiled', self.export_dialog.chkTiled.isEnabled())
-        self.settings.sync()
-        self.statusBar().showMessage('导出数据集成功')
         mb = QtWidgets.QMessageBox
         msg = '导出数据完成'
         answer = mb.information(self.mainWnd,
-                            '导出数据集成功',
+                            '导出数据集成功,可查看数据集',
                             msg)  
         os.startfile(self.export_dialog.txtOutDir.text())
 
-    def exportAsCOCO(self, dir, tiled = True):
-        pass
+    def exportAsCOCO(self, dir):
+        jsons = glob.glob(dir + '/**/*.json', recursive=True)
+        outdir = self.export_dialog.txtOutDir.text()
+        output_json = osp.join(outdir, 'coco.json')
+        labelme2coco(jsons, output_json)
 
-    def exportAsVOC(self, dir, tiled = False):
+    def exportAsVOC(self, dir):
         print('\n\n\n*-------------------------------------export as VOC--------------------------------------------')
         class_names = []
         class_name_to_id = {}
@@ -1870,6 +1888,7 @@ class LabelmePlugin:
             bboxes = []
             labels = []
             colors = [] 
+            unkown_class_type = False 
             for shape in data['shapes']:
                 if shape['shape_type'] != 'rectangle':
                     print('*Skipping shape: label={label}, shape_type={shape_type}'
@@ -1877,7 +1896,11 @@ class LabelmePlugin:
                     continue
                 class_name = shape['label']
                 print('*class_name', class_name)
-                class_id = class_names.index(class_name)
+                try:
+                    class_id = class_names.index(class_name)
+                except Exception as e:
+                    unkown_class_type = True
+                    break
                 (xmin_, ymin_), (xmax_, ymax_) = shape['points']
                 #convert to image coordination here
                 xmin = (xmin_ - geoTrans[0]) / geoTrans[1]
@@ -1900,6 +1923,8 @@ class LabelmePlugin:
                         ),
                     )
                 )
+            if (unkown_class_type):
+                break  #next json file
             captions = [class_names[l] for l in labels]
             colormap = labelme.utils.label_colormap(255)
             for label in labels:
@@ -2001,19 +2026,3 @@ def gdalCopy(src_filename, dst_filename):
     src_ds = None
     shutil.copy(src_filename, dst_filename)
     return w,h,d
-
-def map2img(geoTrans, x, y):
-    u = (x - geoTrans[0]) / geoTrans[1]
-    v = (geoTrans[3] - y) / -geoTrans[5]
-    return u, v
-
-
-def img2map(geoTrans, x, y):
-    u = geoTrans[0] + geoTrans[1]*x
-    v = geoTrans[3] + geoTrans[5]*y
-    return u ,v 
-
-def img2map_p(geoTrans, p):
-    u = geoTrans[0] + geoTrans[1]*p[0]
-    v = geoTrans[3] + geoTrans[5]*p[1]
-    return u ,v 
