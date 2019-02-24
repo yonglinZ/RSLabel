@@ -1,12 +1,4 @@
 __ignore__
 _background_
-one
-two
-three
-four
-five
-six
-seven
-eight
-nigh
-ten
+house
+park

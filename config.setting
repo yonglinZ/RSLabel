@@ -1,5 +1,18 @@
 [General]
 LastOpenedDirectory=D:\\warehouse\\data\\JIN\\JPD\x6d4b\x8bd5\\\x6c5f\x897f\x6d4b\x8bd5
 BuildPyramidDialog_FOLDER_OR_FILE=file
-SelectedBands="2,1,0"
+SelectedBands="0,0,0"
+ShowNullPixel=1
 ="======"
+
+[MainWindow]
+geometry=@ByteArray(\x1\xd9\xd0\xcb\0\x2\0\0\0\0\0\x90\0\0\0\x31\0\0\x6\xe8\0\0\x3\xbd\0\0\0\x98\0\0\0P\0\0\x6\xe0\0\0\x3\xb5\0\0\0\0\0\0\0\0\a\x80)
+windowState="@ByteArray(\0\0\0\xff\0\0\0\0\xfd\0\0\0\x2\0\0\0\x1\0\0\0\xe5\0\0\x3^\xfc\x2\0\0\0\x4\xfb\0\0\0(\0p\0i\0x\0\x65\0l\0Q\0u\0\x65\0r\0y\0\x44\0o\0\x63\0k\0W\0i\0\x64\0g\0\x65\0t\0\0\0\0\0\xff\xff\xff\xff\0\0\0m\0\xff\xff\xff\xfb\0\0\0\f\0L\0\x61\0\x62\0\x65\0l\0s\x2\0\0\x3=\0\0\x1\\\0\0\0\xe5\0\0\x1\x91\xfb\0\0\0\n\0\x46\0l\0\x61\0g\0s\x2\0\0\x5^\0\0\x1\x41\0\0\0\xe5\0\0\x3H\xfc\0\0\x1\xa5\0\0\x2>\0\0\0\0\0\xff\xff\xff\xfa\xff\xff\xff\xff\x1\0\0\0\x3\xfb\0\0\0\n\0\x46\0i\0l\0\x65\0s\x2\0\0\x1\x5\0\0\x1X\0\0\0\xe5\0\0\x2(\xfb\0\0\0\x14\0i\0n\0\x66\0o\0W\0i\0\x64\0g\0\x65\0t\x2\0\0\x2'\0\0\x1U\0\0\0\xe5\0\0\x2\x14\xfb\0\0\0\x14\0L\0\x61\0\x62\0\x65\0l\0 \0L\0i\0s\0t\x2\0\0\x4[\0\0\x1\x65\0\0\0\xe5\0\0\x2\x14\0\0\0\x3\0\0\a!\0\0\x1\x9f\xfc\x1\0\0\0\x1\xfb\0\0\0\x1c\0s\0t\0\x61\0t\0i\0s\0t\0i\0\x63\0s\0\x44\0o\0\x63\0k\0\0\0\0\0\xff\xff\xff\xff\0\0\0P\0\xff\xff\xff\0\0\x5\x64\0\0\x1,\0\0\0\x4\0\0\0\x4\0\0\0\b\0\0\0\b\xfc\0\0\0\x3\0\0\0\0\0\0\0\0\0\0\0\x2\0\0\0\x1\0\0\0\x18\0T\0o\0o\0l\0s\0T\0o\0o\0l\0\x42\0\x61\0r\x1\0\0\0\0\xff\xff\xff\xff\0\0\0\0\0\0\0\0\0\0\0\x2\0\0\0\x1\0\0\0\xe\0t\0o\0o\0l\0\x42\0\x61\0r\x1\0\0\0\0\xff\xff\xff\xff\0\0\0\0\0\0\0\0)"
+docks\1\size=@Size(229 532)
+docks\2\size=@Size(229 532)
+docks\3\size=@Size(229 552)
+docks\4\size=@Size(229 447)
+docks\5\size=@Size(229 447)
+docks\6\size=@Size(229 401)
+docks\7\size=@Size(229 840)
+docks\size=7

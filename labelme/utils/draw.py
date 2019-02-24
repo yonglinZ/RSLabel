@@ -119,7 +119,6 @@ def draw_label(label, img=None, label_names=None, colormap=None, **kwargs):
     out = np.asarray(out)
     return out
 
-
 def draw_instances(
     image=None,
     bboxes=None,

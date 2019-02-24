@@ -50,6 +50,7 @@ class LabelmePlugin:
         self.editor = iface.editor()
         self.menuBar = self.mainWnd.menuBar()
         self.fileInfo_dock = self.iface.getInfoWidget()
+        self.fileInfo_dock.setVisible(False)
         config = get_config()
         self._config = config
         self.colorDialog = ColorDialog(parent=self.mainWnd)
@@ -90,6 +91,13 @@ class LabelmePlugin:
             completion=self._config['label_completion'],
             fit_to_content=self._config['fit_to_content'],
         )
+        #config and settings       
+        # XXX: Could be completely declarative.
+        # Restore application settings.
+        self.settings = QtCore.QSettings('labelme', 'labelme')
+        # FIXME: QSettings.value can return None on PyQt4
+
+        self.recentFiles = self.settings.value('recentFiles', []) or []
         self.createDockWidgets()        
         self.createActionsAndMenus()
         #add tool bar to main window
@@ -97,7 +105,6 @@ class LabelmePlugin:
         self.populateModeActions()
         self.setSignals()
      
-
         # Application state.
         self.image = QtGui.QImage()
         self.imagePath = None
@@ -106,13 +113,6 @@ class LabelmePlugin:
         self.lineColor = DEFAULT_LINE_COLOR 
         self.fillColor = DEFAULT_FILL_COLOR
         self.otherData = {} 
-
-        #config and settings       
-        # XXX: Could be completely declarative.
-        # Restore application settings.
-        self.settings = QtCore.QSettings('labelme', 'labelme')
-        # FIXME: QSettings.value can return None on PyQt4
-        self.recentFiles = self.settings.value('recentFiles', []) or []
        
         # Populate the File menu dynamically.
         self.updateFileMenu()
@@ -284,12 +284,8 @@ class LabelmePlugin:
         self.editor.loadShapes(shapes)
 
     def loadLabels(self, shapes):
-        print('* Plugin. load labels')
         s = []
         for label, points, line_color, fill_color, shape_type in shapes:
-            print('*',type(label))
-            print('*',type(shape_type))
-            print('* label',label)
             shape = LabelmeShape(label, shape_type)
             for x, y in points:
                 print('*({},{})'.format(x,y))
@@ -302,13 +298,16 @@ class LabelmePlugin:
                 shape.fill_color = QtGui.QColor(*fill_color)
         self.loadShapes(s)
 
+    #*
     def loadFlags(self, flags):
+        print('*load Flags', flags)
         self.flag_widget.clear()
         for key, flag in flags.items():
             item = QtWidgets.QListWidgetItem(key)
             item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
             item.setCheckState(Qt.Checked if flag else Qt.Unchecked)
             self.flag_widget.addItem(item)
+
 
     # called by saveFile
     def saveLabels(self, filename):
@@ -762,31 +761,29 @@ class LabelmePlugin:
             self.fillColor = QtGui.QColor(*self.labelFile.fillColor)
             self.otherData = self.labelFile.otherData
             self.geoTrans = self.otherData['geoTrans']
+        
+        # no matter there has a labelfile. we need to read file here.  some raster must 
+        # get statistics
+        print('*call gdal to read file')
+        imageHandle = read(filename) #*
+        if imageHandle is not None:
+            # the filename is image not JSON
+            self.imagePath = filename
+            self.imageWidth = imageHandle.RasterXSize
+            self.imageHeight = imageHandle.RasterYSize
+            self.geoTrans = imageHandle.GetGeoTransform()
+            self.otherData['geoTrans'] = self.geoTrans
+            del imageHandle
         else:
-            # Load image:
-            # read data first and store for saving into label file.
-            # self.imageData = read(filename, None) *
-            print('*call gdal to read file')
-            imageHandle = read(filename) #*
-            if imageHandle is not None:
-                # the filename is image not JSON
-                self.imagePath = filename
-                self.imageWidth = imageHandle.RasterXSize
-                self.imageHeight = imageHandle.RasterYSize
-                self.geoTrans = imageHandle.GetGeoTransform()
-                self.otherData['geoTrans'] = self.geoTrans
-                del imageHandle
-                self.labelFile = None
-            else:
-                formats = ['*.{}'.format(fmt.data().decode())
-                        for fmt in QtGui.QImageReader.supportedImageFormats()]
-                self.errorMessage(
-                    'Error opening file',
-                    '<p>Make sure <i>{0}</i> is a valid image file.<br/>'
-                    'Supported image formats: {1}</p>'
-                    .format(filename, ','.join(formats)))
-                self.status("Error reading %s" % filename)
-                return False
+            formats = ['*.{}'.format(fmt.data().decode())
+                    for fmt in QtGui.QImageReader.supportedImageFormats()]
+            self.errorMessage(
+                'Error opening file',
+                '<p>Make sure <i>{0}</i> is a valid image file.<br/>'
+                'Supported image formats: {1}</p>'
+                .format(filename, ','.join(formats)))
+            self.status("Error reading %s" % filename)
+            return False
             
         self.filename = filename
         if self._config['keep_prev']:
@@ -812,7 +809,7 @@ class LabelmePlugin:
         self.paintCanvas()
         self.addRecentFile(self.filename)
         self.toggleActions(True)
-        self.status("Loaded %s" % osp.basename(str(filename)))
+        self.status("加载 %s" % osp.basename(str(filename)))
         return True 
 
     def setClean(self):
@@ -956,17 +953,27 @@ class LabelmePlugin:
         self.iface.addDockWidget(Qt.RightDockWidgetArea, self.label_dock) #
 
         self.fileSearch = QtWidgets.QLineEdit()
-        self.fileSearch.setPlaceholderText('Search Filename')
+        self.fileSearch.setPlaceholderText('搜索文件')
         self.fileSearch.textChanged.connect(self.fileSearchChanged)
+        self.showAllFiles = QtWidgets.QPushButton('显示所有')
+        self.showAllFiles.setCheckable(True)
+        self.showAllFiles.toggled.connect(self.onShowAllFiles)
+        self.showAllFiles.setIcon(labelme.utils.newIcon('layers'))
+        layout = QtWidgets.QHBoxLayout()
+        layout.addWidget(self.fileSearch)
+        layout.addWidget(self.showAllFiles)
         self.fileListWidget = QtWidgets.QListWidget()
         self.fileListWidget.itemSelectionChanged.connect(
             self.fileSelectionChanged
         )
+
         fileListLayout = QtWidgets.QVBoxLayout()
         fileListLayout.setContentsMargins(0, 0, 0, 0)
         fileListLayout.setSpacing(0)
-        fileListLayout.addWidget(self.fileSearch)
+        #fileListLayout.addWidget(self.fileSearch)
+        fileListLayout.addLayout(layout)
         fileListLayout.addWidget(self.fileListWidget)
+        fileListLayout.addLayout(layout)
         self.file_dock = QtWidgets.QDockWidget(u'文件列表', self.mainWnd)
         self.file_dock.setObjectName(u'Files')
         fileListWidget = QtWidgets.QWidget()
@@ -1288,7 +1295,6 @@ class LabelmePlugin:
     def setSignals(self):
         '''      
         #connect signal
-
         if self.output_file is not None and self._config['auto_save']:
             logger.warn(
                 'If `auto_save` argument is True, `output_file` argument '
@@ -1301,9 +1307,9 @@ class LabelmePlugin:
         self.editor.newShape.connect(self.newShape)
         self.editor.shapeMoved.connect(self.setDirty)
         self.editor.selectionChanged.connect(self.shapeSelectionChanged)
-        self.editor.editorClose.connect(self.closeEvent)
         self.editor.enabled.connect(self.editorEnabled)
         self.editor.edgeSelected.connect(self.actions.addPoint.setEnabled)
+        self.editor.editorClose.connect(self.closeEvent)
 
     ########################################################################################################
     #                                         Utils
@@ -1512,7 +1518,26 @@ class LabelmePlugin:
         # self.settings.setValue('window/geometry', self.saveGeometry())
 
 
-
+    def onShowAllFiles(self, e):
+        # to display the image
+        if(len(self.imageList) <= 1):
+            return
+        if (e):
+            self.editor.clearShapes()
+            self.iface.reset() 
+            self.iface.openFiles(self.imageList)
+            self.actions.save.setEnabled(False)
+            self.actions.createMode.setEnabled(False)
+            self.actions.createRectangleMode.setEnabled(False)
+            self.actions.createCircleMode.setEnabled(False)
+            self.actions.createLineMode.setEnabled(False)
+            self.actions.createPointMode.setEnabled(False)
+            self.actions.createLineStripMode.setEnabled(False)
+            self.actions.editMode.setEnabled(False)
+        else:
+            self.editor.clearShapes()
+            self.iface.reset() 
+            self.iface.openFile(self.imageList[0])
 
 
 ########################################################################################################
@@ -1555,8 +1580,10 @@ class LabelmePlugin:
         json file of labelme is plit too.
         return the output dir.
         '''
+        print('\n\n\n*-------------------------------------SPLIT FILES--------------------------------------------')
         jsons = glob.glob(self.lastOpenDir + '/**/*.json', recursive=True)
         jsonNum = len(jsons)
+        self.labels = set()
         for i, label_file in enumerate(jsons):
             base = osp.splitext(osp.basename(label_file))[0]
             filePathWithoutExt = osp.splitext(label_file)[0]
@@ -1575,10 +1602,10 @@ class LabelmePlugin:
                 outDir = self.export_dialog.txtOutDir.text()
                 outDir = osp.join(outDir , 'tiles', base)
                 if(not osp.exists(outDir)):
-                    os.makedirs(outDir)            
+                    os.makedirs(outDir)
                 self.statusBar().showMessage('正在处理 %s' % img_file)
                 #load json
-                print('* begin to load json', label_file)
+                print('* begin to load json file', label_file)
                 validBlocks = []
                 with open(label_file) as f:
                     data = json.load(f)  #data is json file's content
@@ -1589,11 +1616,25 @@ class LabelmePlugin:
                     imageWidth = data['imageWidth']
                     flags = data['flags']
                     otherData = {}
+                    keys = [
+                        'imageData',
+                        'imagePath',
+                        'lineColor',
+                        'fillColor',
+                        'shapes',  # polygonal annotations
+                        'flags',   # image level flags
+                        'imageHeight',
+                        'imageWidth',]
+                    for key, value in data.items():
+                        if key not in keys:
+                            otherData[key] = value
+                    geoTrans = otherData['geoTrans']
                     tile_x_count = math.ceil(imageWidth/tileSz)
                     tile_y_count = math.ceil(imageHeight/tileSz)
-                    print('* json load, image width is {}, image height is {}, tile_x_count is {}, tile_y_count is {}'.format(imageWidth, imageHeight, tile_x_count,tile_y_count))
+                    print('* @|@json load, image width is {}, image height is {}, tile_x_count is {}, tile_y_count is {}'.format(imageWidth, imageHeight, tile_x_count,tile_y_count))
                     for row in range(tile_y_count):
                         for col in range(tile_x_count):
+                            print('*tile({},{})'.format(row, col))
                             if(col == (tile_x_count -1)):
                                 iw = imageWidth - col * tileSz
                             else:
@@ -1602,29 +1643,42 @@ class LabelmePlugin:
                                 ih = imageHeight - row * tileSz
                             else:
                                 ih = tileSz
+                            #get the tiles rect (image coordination system)
+                            tileRect = QtCore.QRectF(
+                                col*tileSz,
+                                row*tileSz,
+                                iw, ih)
                             shapes = []
                             for s in data['shapes']:
+                                self.labels.add(s['label'])
                                 shape_type = s.get('shape_type', 'polygon')
                                 points = s['points']
                                 if(shape_type == 'rectangle'):
-                                    #get the tiles rect (image coordination system)
-                                    tileRect = QtCore.QRectF(
-                                        col*tileSz,
-                                        row*tileSz,
-                                        iw, ih)
-                                    rect = QtCore.QRectF(QPoint(*self.map2img(points[0][0],points[0][1])),
-                                        QPoint(*self.map2img(points[1][0],points[1][1])))
+                                    rect = QtCore.QRectF(QPoint(*map2img(geoTrans,points[0][0],points[0][1])),
+                                        QPoint(*map2img(geoTrans,points[1][0],points[1][1])))
                                     if(rect.intersects(tileRect)):
-                                        print('* @|@ get an intersected rect')
+                                        print('* @|@ tile({},{}) get intersected rectangle, write to label ...'.format(row,col))
                                         intersected = tileRect.intersected(rect)
-                                        UL = self.img2map(intersected.topLeft().x(), intersected.topLeft().y())
-                                        LR = self.img2map(intersected.bottomRight().x(), intersected.bottomRight().y())
+                                        UL = img2map(geoTrans,intersected.topLeft().x(), intersected.topLeft().y())
+                                        LR = img2map(geoTrans,intersected.bottomRight().x(), intersected.bottomRight().y())
                                         copyS = copy.deepcopy(s)
                                         copyS['points'] = [UL,LR]
                                         shapes.append(copyS)                                        
                                 elif(shape_type == 'polygon'):
-                                    pass
-
+                                    tilePolygon = QtGui.QPolygonF(tileRect)
+                                    ps = []
+                                    for pnt in points:
+                                        ps.append(QPointF(*map2img(geoTrans,pnt[0],pnt[1])))
+                                    polygon = QtGui.QPolygonF(ps)
+                                    polygon = polygon.intersected(tilePolygon)
+                                    if(len(polygon) > 0):
+                                        print('* @|@ tile({},{}) get intersected polygon, write to label ...'.format(row,col))
+                                        copyS = copy.deepcopy(s)
+                                        pts = [(pnt.x(), pnt.y()) for pnt in polygon]
+                                        mapfunc = functools.partial(img2map_p, geoTrans)
+                                        pts = list(map(mapfunc, pts))
+                                        copyS['points'] = pts 
+                                        shapes.append(copyS) 
                             label_file_t = osp.join(outDir, '{}_{}_{}.{}'.format(base, row, col, 'json'))
                             imagePath = '{}_{}_{}.{}'.format(base, row, col, e[1:])
                             fullImagePath = osp.join(outDir,'{}_{}_{}.{}'.format(base, row, col, e[1:]))
@@ -1632,12 +1686,12 @@ class LabelmePlugin:
                                 continue
                             validBlocks.append(QtCore.QPoint(col, row))
                             #begin to create json file for the block file
-                            otherData['geoTrans'] = [self.geoTrans[0]+self.geoTrans[1]*col*tileSz,
-                                                        self.geoTrans[1],
-                                                        self.geoTrans[2],
-                                                        self.geoTrans[3]+self.geoTrans[5]*row*tileSz,
-                                                        self.geoTrans[4],
-                                                        self.geoTrans[5]]
+                            otherData['geoTrans'] = [geoTrans[0]+geoTrans[1]*col*tileSz,
+                                                        geoTrans[1],
+                                                        geoTrans[2],
+                                                        geoTrans[3] + geoTrans[5]*row*tileSz,
+                                                        geoTrans[4],
+                                                        geoTrans[5]]
                             print('* @|@ label_file_t', label_file_t)
                             lf = LabelFile()
                             lf.save(
@@ -1652,9 +1706,18 @@ class LabelmePlugin:
                                 otherData=otherData,
                                 flags=flags,
                             )
-                if(len(validBlocks) > 0):
+                if(validBlocks):
                     self.iface.gdal2Tile(img_file,tileSz, outDir, validBlocks)
-                    pass
+            print('*',self.labels)
+            assert self.labels
+            labels_file = osp.join(here, 'labels.txt')
+            with open(labels_file,'w') as f:
+                f.write('__ignore__\n')
+                f.write('_background_\n')
+                for label in self.labels:
+                    f.write(label+'\n')
+
+            #write flags to labels.txt
         self.statusBar().showMessage('处理完毕')
         outDir = self.export_dialog.txtOutDir.text()
         outDir = osp.join(outDir , 'tiles')
@@ -1662,52 +1725,80 @@ class LabelmePlugin:
       
    
     def export(self):
-        dir = self.lastOpenDir
+        self.exportOutDir = self.export_dialog.txtOutDir.text()
+        if (not osp.exists(self.exportOutDir)):
+            os.makedirs(self.exportOutDir)
+
+        if os.listdir(self.exportOutDir):
+            mb = QtWidgets.QMessageBox
+            msg = '该目录非空,是否覆盖该文件夹中的内容 ?'
+            answer = mb.question(self.mainWnd,
+                                '该目录非空',
+                                msg,
+                                mb.Yes | mb.Cancel,
+                                mb.Yes)
+            if(answer == mb.Yes):
+                try:
+                    #shutil.rmtree(self.exportOutDir,ignore_errors=True)
+                    os.system('rd ' + self.exportOutDir + '/s /q')
+                except Exception as e:
+                    print('*repr(e):\t', repr(e) )
+                    print('* ^|^ remove file failed')
+        try:
+            os.makedirs(osp.join(self.exportOutDir, 'JPEGImages'))
+            os.makedirs(osp.join(self.exportOutDir, 'Annotations'))
+            os.makedirs(osp.join(self.exportOutDir, 'AnnotationsVisualization'))
+        except Exception:
+            print('*Creating dataset failed:', self.exportOutDir)
+
+        self.isTiled = False
         if(self.export_dialog.chkTiled.isChecked()):  #need to split to tiles
             out = self.splitFile()
             dir = out 
-        if(self.export_dialog.radVOC.isChecked()):
-            pass
-            #self.exportAsVOC(dir)
+            self.isTiled = True
         else:
-            #self.exportAsCOCO(dir)
-            pass
+            jsons = glob.glob(self.lastOpenDir + '/**/*.json', recursive=True)
+            jsonNum = len(jsons)
+            self.labels = set()
+            for label_file in jsons:
+                with open(label_file) as f:
+                    data = json.load(f)  #data is json file's content
+                    for s in data['shapes']:
+                        self.labels.add(s['label'])
+            labels_file = osp.join(here, 'labels.txt')
+            with open(labels_file,'w') as f:
+                f.write('__ignore__\n')
+                f.write('_background_\n')
+                for label in self.labels:
+                    f.write(label+'\n')
+            dir = self.lastOpenDir
+
+        if(self.export_dialog.radVOC.isChecked()):
+            self.exportAsVOC(dir)
+        else:
+            self.exportAsCOCO(dir)
         #save the settings
         self.settings.setValue('export_tile_size', self.export_dialog.txtTileSize.text())
         self.settings.setValue('export_tiled', self.export_dialog.chkTiled.isEnabled())
         self.settings.sync()
+        self.statusBar().showMessage('导出数据集成功')
         mb = QtWidgets.QMessageBox
         msg = '导出数据完成'
         answer = mb.information(self.mainWnd,
-                            '成功',
+                            '导出数据集成功',
                             msg)  
+        os.startfile(self.export_dialog.txtOutDir.text())
 
-    def exportAsCOCO(self, dir):
+    def exportAsCOCO(self, dir, tiled = True):
         pass
 
-    def exportAsVOC(self, dir):
-        '''
-        if os.listdir(self.exportOutDir):
-            self.errorMessage(
-                '该目录非空',
-                '必须选择一个新的文件夹.')
-        '''
-        self.exportOutDir = self.export_dialog.txtOutDir.text()
-        if not osp.exists(self.exportOutDir):
-            os.makedirs(self.exportOutDir)
-        if not osp.exists(osp.join(self.exportOutDir, 'JPEGImages')):
-            os.makedirs(osp.join(self.exportOutDir, 'JPEGImages'))
-        if not osp.exists(osp.join(self.exportOutDir, 'Annotations')):
-            os.makedirs(osp.join(self.exportOutDir, 'Annotations'))
-        if not osp.exists(osp.join(self.exportOutDir, 'AnnotationsVisualization')):
-            os.makedirs(osp.join(self.exportOutDir, 'AnnotationsVisualization'))
-        print('*Creating dataset:', self.exportOutDir)
-
+    def exportAsVOC(self, dir, tiled = False):
+        print('\n\n\n*-------------------------------------export as VOC--------------------------------------------')
         class_names = []
         class_name_to_id = {}
         labels_file = osp.join(here, 'labels.txt')
         print('*labels file:',labels_file)
-        ''' 
+        ##########     
         for i, line in enumerate(open(labels_file).readlines()):
             class_id = i - 1  # starts with -1
             class_name = line.strip()
@@ -1719,36 +1810,52 @@ class LabelmePlugin:
                 assert class_name == '_background_'
             class_names.append(class_name)
         class_names = tuple(class_names)
-        print('class_names:', class_names)
+        print('*class_names:', class_names)
         out_class_names_file = osp.join(self.exportOutDir, 'class_names.txt')
         with open(out_class_names_file, 'w') as f:
             f.writelines('\n'.join(class_names))
-        print('Saved class_names:', out_class_names_file)
-        '''
+        print('*Saved class_names:', out_class_names_file)
+        #########
         jsons = glob.glob(dir + '/**/*.json', recursive=True)
-        print('* export dir: {}'.format(dir))
-        print('* jsons',jsons)
+        print('*export dir: {}'.format(dir))
+        print('*jsons',jsons)
         jsonNum = len(jsons)
         for i, label_file in enumerate(jsons):
-            print('* @|@Generating dataset from:', label_file)
             with open(label_file) as f:
                 data = json.load(f)  #data is json file's content
+                #get geo trans parameters from json file
+                otherData = {}
+                keys = [
+                    'imageData',
+                    'imagePath',
+                    'lineColor',
+                    'fillColor',
+                    'shapes',  # polygonal annotations
+                    'flags',   # image level flags
+                    'imageHeight',
+                    'imageWidth',]
+                for key, value in data.items():
+                    if key not in keys:
+                        otherData[key] = value
+                geoTrans = otherData['geoTrans']
+            #make dirs for voc
             base = osp.splitext(osp.basename(label_file))[0]
             out_img_file = osp.join(
-                self.exportOutDir, 'JPEGImages', base + '.tif')
+                self.exportOutDir, 'JPEGImages', data['imagePath'])
             out_xml_file = osp.join(
                 self.exportOutDir, 'Annotations', base + '.xml')
             out_viz_file = osp.join(
                 self.exportOutDir, 'AnnotationsVisualization', base + '.tif')
-
+            # get the image file to copy to ...
             img_file = osp.join(osp.dirname(label_file), data['imagePath'])
-            print('*export ',img_file)
-            print('* to ', out_img_file)
+            print('*export',img_file)
+            print('*to', out_img_file)
             shape = gdalCopy(img_file, out_img_file)
+            self.statusBar().showMessage('正在拷贝文件{}'.format(img_file))
             maker = lxml.builder.ElementMaker()
             xml = maker.annotation(
                 maker.folder(),
-                maker.filename(base + '.tif'),
+                maker.filename(data['imagePath']),
                 maker.database(),    # e.g., The VOC2007 Database
                 maker.annotation(),  # e.g., Pascal VOC2007
                 maker.image(),       # e.g., flickr
@@ -1759,31 +1866,26 @@ class LabelmePlugin:
                 ),
                 maker.segmented(),
             )
-            print('*size: width {}, height {}, raster {}'.format(shape[0],shape[1],shape[2]))
+            print('*VOC image, size: width {}, height {}, raster {}'.format(shape[0],shape[1],shape[2]))
             bboxes = []
             labels = []
+            colors = [] 
             for shape in data['shapes']:
                 if shape['shape_type'] != 'rectangle':
-                    print('Skipping shape: label={label}, shape_type={shape_type}'
+                    print('*Skipping shape: label={label}, shape_type={shape_type}'
                         .format(**shape))
                     continue
                 class_name = shape['label']
                 print('*class_name', class_name)
-                #class_id = class_names.index(class_name)
-                (xmin, ymin), (xmax, ymax) = shape['points']
+                class_id = class_names.index(class_name)
+                (xmin_, ymin_), (xmax_, ymax_) = shape['points']
                 #convert to image coordination here
-                ul = QPointF(xmin,ymin)
-                qpoint_ul = self.iface.map2Image(ul)
-                lr = QPoint(xmax, ymax)
-                qpoint_lr = self.iface.map2Image(lr)
-                print('\n\n\n*@|@ {},{}-{},{}'.format(qpoint_ul.x(),qpoint_ul.y(),qpoint_lr.x(),qpoint_lr.y()))
-                bboxes.append([qpoint_ul.x(),qpoint_ul.y(),qpoint_lr.x(),qpoint_lr.y()])
-                xmin = qpoint_ul.x()
-                ymin = qpoint_ul.y()
-                xmax = qpoint_lr.x()
-                ymax = qpoint_lr.y()
-                #bboxes.append([xmin, ymin, xmax, ymax])
-                #labels.append(class_id)
+                xmin = (xmin_ - geoTrans[0]) / geoTrans[1]
+                ymin = (geoTrans[3] - ymin_) / -geoTrans[5]
+                xmax = (xmax_ - geoTrans[0]) / geoTrans[1]
+                ymax = (geoTrans[3] - ymax_) / -geoTrans[5]
+                bboxes.append(QRect(QPoint(xmin,ymin),QPoint(xmax,ymax))) 
+                labels.append(class_id)
                 xml.append(
                     maker.object(
                         maker.name(shape['label']),
@@ -1798,18 +1900,32 @@ class LabelmePlugin:
                         ),
                     )
                 )
-            '''
             captions = [class_names[l] for l in labels]
-            viz = labelme.utils.draw_instances(
-                img, bboxes, labels, captions=captions
-            )
-            PIL.Image.fromarray(viz).save(out_viz_file)
-            '''
+            colormap = labelme.utils.label_colormap(255)
+            for label in labels:
+                color = (colormap[label]*255).astype(np.uint8)
+                colors.append(QColor(*color))
+            print('*captions {},  labels {},  colors {}'.format(captions, labels, colors))
+           
+            if(captions and self.isTiled):
+                self.statusBar().showMessage('正在给文件{}画实例'.format(img_file))
+                (pathName,extension) = os.path.splitext(img_file)
+                omd = pathName + '.omd'
+                if(not osp.exists(omd)):
+                    img = read(img_file)
+                    del img
+                self.iface.draw_instances(img_file, out_viz_file, bboxes, colors, captions)  
+
+            if(not self.isTiled):
+                readme = osp.join(
+                    self.exportOutDir, 'AnnotationsVisualization', 'readme.txt')
+                with open(readme,'w') as f:
+                    f.write('未分块的输入文件不支持draw instance操作')
+            #write xml
             with open(out_xml_file, 'wb') as f:
                 f.write(lxml.etree.tostring(xml, pretty_print=True))
             self.iface.setProgress((int)((i+1)*100.0/jsonNum))
             i = i + 1
-
 
     def map2img(self, x, y):
         u = (x - self.geoTrans[0]) / self.geoTrans[1]
@@ -1819,6 +1935,11 @@ class LabelmePlugin:
     def img2map(self, x, y):
         u = self.geoTrans[0] + self.geoTrans[1]*x
         v = self.geoTrans[3] + self.geoTrans[5]*y
+        return u ,v 
+
+    def img2map_p(self, p):
+        u = self.geoTrans[0] + self.geoTrans[1]*p[0]
+        v = self.geoTrans[3] + self.geoTrans[5]*p[1]
         return u ,v 
 
 ########################################################################################################
@@ -1833,7 +1954,7 @@ def read(filename):
             return None
 
         datatype = img.GetRasterBand(1).DataType
-        print('* @|@ read file, datatype', datatype) 
+        print('* @|@ read file, datatype$$$$$$$$$$$$$$$$$$$$$$$$$$$$$', datatype) 
         '''
         desc = img.GetDescription()
         metadata = img.GetMetadata() #
@@ -1880,3 +2001,19 @@ def gdalCopy(src_filename, dst_filename):
     src_ds = None
     shutil.copy(src_filename, dst_filename)
     return w,h,d
+
+def map2img(geoTrans, x, y):
+    u = (x - geoTrans[0]) / geoTrans[1]
+    v = (geoTrans[3] - y) / -geoTrans[5]
+    return u, v
+
+
+def img2map(geoTrans, x, y):
+    u = geoTrans[0] + geoTrans[1]*x
+    v = geoTrans[3] + geoTrans[5]*y
+    return u ,v 
+
+def img2map_p(geoTrans, p):
+    u = geoTrans[0] + geoTrans[1]*p[0]
+    v = geoTrans[3] + geoTrans[5]*p[1]
+    return u ,v 
