@@ -1,5 +1,4 @@
 __ignore__
 _background_
-house
-park
-road
+cloud
+river
