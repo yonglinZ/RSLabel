@@ -8,7 +8,6 @@ import glob
 import functools
 
 
-
 def map2img(geoTrans, x, y):
     u = (x - geoTrans[0]) / geoTrans[1]
     v = (geoTrans[3] - y) / -geoTrans[5]
@@ -20,15 +19,28 @@ def map2img_p(geoTrans, p):
     v = (geoTrans[3] - p[1]) / -geoTrans[5]
     return u, v
 
+
 def img2map(geoTrans, x, y):
     u = geoTrans[0] + geoTrans[1]*x
     v = geoTrans[3] + geoTrans[5]*y
-    return u ,v 
+    return [u, v]
+
 
 def img2map_p(geoTrans, p):
     u = geoTrans[0] + geoTrans[1]*p[0]
     v = geoTrans[3] + geoTrans[5]*p[1]
-    return u ,v 
+    return u, v
+
+def offset(tileSz, row, col, x, y):
+    u = x - col * tileSz
+    v = (row + 1) * tileSz - y 
+    return u, v
+
+def offset_p(tileSz, row, col, p):
+    u = p[0] - col * tileSz
+    v = (row + 1) * tileSz - p[1]
+    return u, v
+
 
 class labelme2coco(object):
     def __init__(self, labelme_json=[], save_json_path='./new.json'):
@@ -79,7 +91,7 @@ class labelme2coco(object):
                             self.categories.append(self.categorie(label))
                             self.labels.append(label[0])
                     points = shape['points']
-                    #convert to image coord
+                    # convert to image coord
                     points = list(map(mapfunc, points))
                     self.annotations.append(
                         self.annotation(points, label, num))
@@ -132,9 +144,11 @@ class labelme2coco(object):
         polygons = points
         array = np.array(polygons).reshape(-1, 2)
         print('* getbbox', array)
-        left_top_c, left_top_r = np.min(array, 0)[0], np.min(array,0)[1]
-        right_bottom_c, right_bottom_r = np.max(array, 0)[0], np.max(array,0)[1]
-        print('*bbox: {},{},{},{}'.format(left_top_c, left_top_r, right_bottom_c, right_bottom_r))
+        left_top_c, left_top_r = np.min(array, 0)[0], np.min(array, 0)[1]
+        right_bottom_c, right_bottom_r = np.max(
+            array, 0)[0], np.max(array, 0)[1]
+        print('*bbox: {},{},{},{}'.format(left_top_c,
+                                          left_top_r, right_bottom_c, right_bottom_r))
         return [left_top_c, left_top_r, right_bottom_c-left_top_c, right_bottom_r-left_top_r]
 
     def mask2box(self, polygons):

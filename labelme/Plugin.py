@@ -431,7 +431,7 @@ class LabelmePlugin:
         path = osp.dirname(str(self.filename)) if self.filename else lastOpenDir 
         #formats = ['*.{}'.format(fmt.data().decode())
                    #for fmt in QtGui.QImageReader.supportedImageFormats()]
-        formats = ['*.tif', '*.tiff', '*.pix', '*.pci', '*.img']
+        formats = ['*.tif', '*.jpg', '*.tiff', '*.pix', '*.pci', '*.img']
         filters = "Image & Label files (%s)" % ' '.join(
             formats + ['*%s' % LabelFile.suffix])
         filename = QtWidgets.QFileDialog.getOpenFileName(
@@ -772,7 +772,11 @@ class LabelmePlugin:
             self.imagePath = filename
             self.imageWidth = imageHandle.RasterXSize
             self.imageHeight = imageHandle.RasterYSize
-            self.geoTrans = imageHandle.GetGeoTransform()
+            geoTrans = imageHandle.GetGeoTransform()
+            if(math.isclose(geoTrans[0], 0)):
+                self.geoTrans = [0,1,0, self.imageHeight, 0, -1]
+            else:
+                self.geoTrans = geoTrans
             self.otherData['geoTrans'] = self.geoTrans
             del imageHandle
         else:
@@ -1418,7 +1422,7 @@ class LabelmePlugin:
 
     def labelSelectionChanged(self):
         item = self.currentItem()
-        if item and self.editor.isEditing():
+        if item and (self.editor.isEditing() or self.editor.canBreak()):
             self._noSelectionSlot = True
             shape = self.labelList.get_shape_from_item(item)
             self.editor.selectShape(shape)
@@ -1604,14 +1608,14 @@ class LabelmePlugin:
         jsonNum = len(jsons)
         self.labels = set()
         for i, label_file in enumerate(jsons):
-            base = osp.splitext(osp.basename(label_file))[0]
-            filePathWithoutExt = osp.splitext(label_file)[0]
-            exts = ['.tif', '.env', '.pix', '.img', '.tiff', '.ecw', '.tga']
+            #base = osp.splitext(osp.basename(label_file))[0]
+            base = my_splitext(osp.basename(label_file))[0]
+            filePathWithoutExt = my_splitext(label_file)[0]
+            exts = ['.tif','.env', '.pix', '.img', '.tiff', '.ecw', '.tga']
             e = '.tif'
             findImg = False
             for ext in exts:
                 img_file = filePathWithoutExt + ext
-                print('*', img_file)
                 if(osp.exists(img_file)):
                     findImg = True
                     e = ext
@@ -1648,6 +1652,7 @@ class LabelmePlugin:
                         if key not in keys:
                             otherData[key] = value
                     geoTrans = otherData['geoTrans']
+                    mapfunc = functools.partial(img2map_p, geoTrans)
                     tile_x_count = math.ceil(imageWidth/tileSz)
                     tile_y_count = math.ceil(imageHeight/tileSz)
                     print('* @|@json load, image width is {}, image height is {}, tile_x_count is {}, tile_y_count is {}'.format(imageWidth, imageHeight, tile_x_count,tile_y_count))
@@ -1677,8 +1682,12 @@ class LabelmePlugin:
                                     if(rect.intersects(tileRect)):
                                         print('* @|@ tile({},{}) get intersected rectangle, write to label ...'.format(row,col))
                                         intersected = tileRect.intersected(rect)
-                                        UL = img2map(geoTrans,intersected.topLeft().x(), intersected.topLeft().y())
-                                        LR = img2map(geoTrans,intersected.bottomRight().x(), intersected.bottomRight().y())
+                                        if(math.isclose(geoTrans[0], 0)):
+                                            UL = offset(tileSz, row, col, intersected.topLeft().x(), intersected.topLeft().y())
+                                            LR = offset(tileSz, row, col, intersected.bottomRight().x(), intersected.bottomRight().y())
+                                        else:
+                                            UL = img2map(geoTrans,intersected.topLeft().x(), intersected.topLeft().y())
+                                            LR = img2map(geoTrans,intersected.bottomRight().x(), intersected.bottomRight().y())
                                         copyS = copy.deepcopy(s)
                                         copyS['points'] = [UL,LR]
                                         shapes.append(copyS)                                        
@@ -1692,38 +1701,48 @@ class LabelmePlugin:
                                     if(len(polygon) > 0):
                                         print('* @|@ tile({},{}) get intersected polygon, write to label ...'.format(row,col))
                                         copyS = copy.deepcopy(s)
-                                        pts = [(pnt.x(), pnt.y()) for pnt in polygon]
-                                        mapfunc = functools.partial(img2map_p, geoTrans)
-                                        pts = list(map(mapfunc, pts))
+                                        if(math.isclose(geoTrans[0], 0)):
+                                            pts = [offset(tileSz, row, col, pnt.x(), pnt.y()) for pnt in polygon]
+                                        else:
+                                            pts = [(pnt.x(), pnt.y()) for pnt in polygon]
+                                            pts = list(map(mapfunc, pts))
                                         copyS['points'] = pts 
                                         shapes.append(copyS) 
                             label_file_t = osp.join(outDir, '{}_{}_{}.{}'.format(base, row, col, 'json'))
                             imagePath = '{}_{}_{}.{}'.format(base, row, col, e[1:])
-                            fullImagePath = osp.join(outDir,'{}_{}_{}.{}'.format(base, row, col, e[1:]))
                             if (len(shapes) == 0):
                                 continue
                             validBlocks.append(QtCore.QPoint(col, row))
                             #begin to create json file for the block file
-                            otherData['geoTrans'] = [geoTrans[0]+geoTrans[1]*col*tileSz,
-                                                        geoTrans[1],
-                                                        geoTrans[2],
-                                                        geoTrans[3] + geoTrans[5]*row*tileSz,
-                                                        geoTrans[4],
-                                                        geoTrans[5]]
+                            if(math.isclose(geoTrans[0], 0)):
+                                otherData['geoTrans'] = [0,1,0,ih,0,-1]
+                            else:
+                                otherData['geoTrans'] = [geoTrans[0]+geoTrans[1]*col*tileSz,
+                                                            geoTrans[1],
+                                                            geoTrans[2],
+                                                            geoTrans[3] + geoTrans[5]*row*tileSz,
+                                                            geoTrans[4],
+                                                            geoTrans[5]]
                             print('* @|@ label_file_t', label_file_t)
                             lf = LabelFile()
-                            lf.save(
-                                filename=label_file_t,
-                                shapes=shapes,
-                                imagePath=imagePath,
-                                imageData=None,
-                                imageHeight=ih,
-                                imageWidth=iw,
-                                lineColor=lineColor,
-                                fillColor=fillColor,
-                                otherData=otherData,
-                                flags=flags,
-                            )
+                            try:
+                                lf.save(
+                                    filename=label_file_t,
+                                    shapes=shapes,
+                                    imagePath=imagePath,
+                                    imageData=None,
+                                    imageHeight=ih,
+                                    imageWidth=iw,
+                                    lineColor=lineColor,
+                                    fillColor=fillColor,
+                                    otherData=otherData,
+                                    flags=flags,
+                                )
+                            except Exception as e:
+                                self.errorMessage(
+                                    '写标签文件失败',
+                                    '关闭数据集文件夹后重试.')
+                                return
                 if(validBlocks):
                     self.iface.gdal2Tile(img_file,tileSz, outDir, validBlocks)
             print('*',self.labels)
@@ -1798,9 +1817,9 @@ class LabelmePlugin:
         else:
             self.exportAsCOCO(dir)
         mb = QtWidgets.QMessageBox
-        msg = '导出数据完成'
+        msg =  '导出数据集成功,可查看数据集'
         answer = mb.information(self.mainWnd,
-                            '导出数据集成功,可查看数据集',
+                            '导出数据完成',
                             msg)  
         os.startfile(self.export_dialog.txtOutDir.text())
 
@@ -1836,7 +1855,6 @@ class LabelmePlugin:
         #########
         jsons = glob.glob(dir + '/**/*.json', recursive=True)
         print('*export dir: {}'.format(dir))
-        print('*jsons',jsons)
         jsonNum = len(jsons)
         for i, label_file in enumerate(jsons):
             with open(label_file) as f:
@@ -1994,19 +2012,15 @@ def read(filename):
             (shotname,extension) = os.path.splitext(tempfilename)
             omd = filepath + '/' + shotname + '.omd'
             print('*the omd file is', omd)
-            hasOmd = False
-            if osp.exists(omd):
-                hasOmd = True
-            else:
+            if not osp.exists(omd):
                 omdf = open(omd, 'w')
                 omdf.write('number_bands:  {}\n\n'.format(bandNum))
-            for bandIdx in np.arange(1, bandNum+1):
-                band = img.GetRasterBand(int(bandIdx))
-                stats = band.GetStatistics(0,1) #if no statistic , it will compute
-                if(not hasOmd):
+                for bandIdx in np.arange(1, bandNum+1):
+                    band = img.GetRasterBand(int(bandIdx))
+                    stats = band.GetStatistics(0,1) #if no statistic , it will compute
                     omdf.write('band{}.min_value:  {}\n'.format(bandIdx, stats[0]))
                     omdf.write('band{}.max_value:  {}\n'.format(bandIdx, stats[1]))
-                print('*', stats)
+                    print('*', stats)
     except Exception:
         print('*gdal read {}, failed'.format(filename))
         exstr = traceback.format_exc()
@@ -2026,3 +2040,15 @@ def gdalCopy(src_filename, dst_filename):
     src_ds = None
     shutil.copy(src_filename, dst_filename)
     return w,h,d
+
+
+
+
+def my_splitext(pathname):
+    """splitext for paths with directories that may contain dots."""
+    x = pathname.split(os.extsep)
+    path = x[0]
+    for ext in x[1:-1]:
+        path = path + '.' + ext
+    return path, x[-1]
+

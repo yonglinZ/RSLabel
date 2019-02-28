@@ -1,4 +1,3 @@
 __ignore__
 _background_
-cloud
-river
+screen
