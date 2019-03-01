@@ -1890,17 +1890,16 @@ class LabelmePlugin:
             self.statusBar().showMessage('正在拷贝文件{}'.format(img_file))
             maker = lxml.builder.ElementMaker()
             xml = maker.annotation(
-                maker.folder(),
+                maker.folder('JPEGImages'),
                 maker.filename(data['imagePath']),
-                maker.database(),    # e.g., The VOC2007 Database
-                maker.annotation(),  # e.g., Pascal VOC2007
-                maker.image(),       # e.g., flickr
+                maker.path(out_img_file),
+                maker.source(maker.database('Unknown')),    # e.g., The VOC2007 Database
                 maker.size(
                     maker.height(str(shape[0])),
                     maker.width(str(shape[1])),
                     maker.depth(str(shape[2])),
                 ),
-                maker.segmented(),
+                maker.segmented('0'),
             )
             print('*VOC image, size: width {}, height {}, raster {}'.format(shape[0],shape[1],shape[2]))
             bboxes = []
@@ -1930,14 +1929,14 @@ class LabelmePlugin:
                 xml.append(
                     maker.object(
                         maker.name(shape['label']),
-                        maker.pose(),
-                        maker.truncated(),
-                        maker.difficult(),
+                        maker.pose('Unspecified'),
+                        maker.truncated('0'),
+                        maker.difficult('0'),
                         maker.bndbox(
-                            maker.xmin(str(xmin)),
-                            maker.ymin(str(ymin)),
-                            maker.xmax(str(xmax)),
-                            maker.ymax(str(ymax)),
+                            maker.xmin(str(int(xmin))),
+                            maker.ymin(str(int(ymin))),
+                            maker.xmax(str(int(xmax))),
+                            maker.ymax(str(int(ymax))),
                         ),
                     )
                 )
