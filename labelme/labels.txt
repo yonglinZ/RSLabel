@@ -1,11 +1,5 @@
 __ignore__
 _background_
-cloud
-居民区
-park
-river
 海口
-factory
-road
-house
-bridge
+cloud
+river

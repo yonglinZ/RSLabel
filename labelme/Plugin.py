@@ -57,6 +57,7 @@ class LabelmePlugin:
         self.colorDialog = ColorDialog(parent=self.mainWnd)
         self.grid_color = None
         self.grid_size = None 
+        self.shortName = False 
         print('*self.grid_size', self.grid_size)
 
         # Whether we need to save or not.
@@ -168,7 +169,12 @@ class LabelmePlugin:
         if not self.mayContinue():
             return
 
-        currIndex = self.imageList.index(str(item.text()))
+        if(self.shortName):
+            filename = self.short_long_name[str(item.text())]
+            currIndex = self.imageList.index(filename)
+        else:
+            currIndex = self.imageList.index(str(item.text()))
+
         if currIndex < len(self.imageList):
             filename = self.imageList[currIndex]
             if filename:
@@ -377,13 +383,19 @@ class LabelmePlugin:
         self.lastOpenDir = dirpath
         self.filename = None
         self.fileListWidget.clear()
+        self.short_long_name = {}
         for filename in self.scanAllImages(dirpath):
             if pattern and pattern not in filename:
                 continue
+            filename = filename.replace('\\','/')
             label_file = osp.splitext(filename)[0] + '.json'
             if self.output_dir:
                 label_file = osp.join(self.output_dir, label_file)
-            item = QtWidgets.QListWidgetItem(filename)
+            self.short_long_name[osp.basename(filename)] = filename
+            if(self.shortName):
+                item = QtWidgets.QListWidgetItem(osp.basename(filename))
+            else:
+                item = QtWidgets.QListWidgetItem(filename)
             item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
             if QtCore.QFile.exists(label_file) and \
                     LabelFile.isLabelFile(label_file):
@@ -429,8 +441,6 @@ class LabelmePlugin:
             return
         lastOpenDir = self.settings.value('lastOpenDir')
         path = osp.dirname(str(self.filename)) if self.filename else lastOpenDir 
-        #formats = ['*.{}'.format(fmt.data().decode())
-                   #for fmt in QtGui.QImageReader.supportedImageFormats()]
         formats = ['*.tif', '*.jpg', '*.tiff', '*.pix', '*.pci', '*.img']
         filters = "Image & Label files (%s)" % ' '.join(
             formats + ['*%s' % LabelFile.suffix])
@@ -712,11 +722,20 @@ class LabelmePlugin:
         lst = []
         for i in range(self.fileListWidget.count()):
             item = self.fileListWidget.item(i)
-            lst.append(item.text())
+            if(self.shortName):
+                lst.append(self.short_long_name[item.text()])
+            else:
+                lst.append(item.text())
         return lst
+
+    def isShortName(self, filename):
+        return (filename.find('/')==-1) and (filename.find('\\')==-1)
 
     def loadFile(self, filename=None):
         """Load the specified file, or the last opened file if None."""
+        print('* IS short name? ', self.shortName)
+        if(self.isShortName(filename)):
+            filename = self.short_long_name[filename]
         # changing fileListWidget loads file
         print('\n\n\n*-------------------------------------load a new file --------------------------------------------')
         if (filename in self.imageList and
@@ -727,7 +746,6 @@ class LabelmePlugin:
             return
         print('*resetState')
         self.resetState()
-        # self.canvas.setEnabled(False) *
         if filename is None:
             filename = self.settings.value('filename', '')
         filename = str(filename)
@@ -978,7 +996,15 @@ class LabelmePlugin:
         #fileListLayout.addWidget(self.fileSearch)
         fileListLayout.addLayout(layout)
         fileListLayout.addWidget(self.fileListWidget)
-        fileListLayout.addLayout(layout)
+        self.noPath = QtWidgets.QPushButton('隐藏路径')
+        self.noPath.setCheckable(True)
+        self.noPath.toggled.connect(self.onNoPath)
+        self.openInExplorer = QtWidgets.QPushButton('打开文件夹')
+        self.openInExplorer.clicked.connect(self.onOpenInExplorer)
+        btlayout = QtWidgets.QHBoxLayout()
+        btlayout.addWidget(self.noPath)
+        btlayout.addWidget(self.openInExplorer)
+        fileListLayout.addLayout(btlayout)
         self.file_dock = QtWidgets.QDockWidget(u'文件列表', self.mainWnd)
         self.file_dock.setObjectName(u'Files')
         fileListWidget = QtWidgets.QWidget()
@@ -1003,6 +1029,18 @@ class LabelmePlugin:
         self.labelList.itemChanged.connect(self.labelItemChanged)
         self.labelList.setDragDropMode(
             QtWidgets.QAbstractItemView.InternalMove)
+
+    def onNoPath(self,e):
+        self.shortName =  e
+        if(not self.shortName):
+            for i in range(self.fileListWidget.count()):
+                item = self.fileListWidget.item(i)
+                item.setText(self.short_long_name[item.text()])
+        else:
+            for i in range(self.fileListWidget.count()):
+                item = self.fileListWidget.item(i)
+                item.setText(osp.basename(item.text()))
+        print('* self.shortName', self.shortName)
 
     # Actions and menus
     def createActionsAndMenus(self):
@@ -1039,6 +1077,7 @@ class LabelmePlugin:
         exportAs = action('&导出为', self.exportAs, shortcuts['export_as'],
                         'export', 'export labels to a coco/voc dataset format',
                         enabled=False)
+        '''
         changeOutputDir = action(
             '&改变输出目录',
             slot=self.changeOutputDirDialog,
@@ -1046,6 +1085,7 @@ class LabelmePlugin:
             icon='open',
             tip=u'Change where annotations are loaded/saved'
         )
+        '''
 
         saveAuto = action(
             text='自动 &保存',
@@ -1187,7 +1227,7 @@ class LabelmePlugin:
         # Store actions for further handling.
         self.actions = struct(
             saveAuto=saveAuto,
-            changeOutputDir=changeOutputDir,
+            #changeOutputDir=changeOutputDir,
             save=save, saveAs=saveAs, open=open_, close=close,
             exportAs=exportAs,
             lineColor=color1, fillColor=color2,
@@ -1269,7 +1309,7 @@ class LabelmePlugin:
         )
         addActions(self.menus.file, (open_, openNextImg, openPrevImg, opendir,
                                      self.menus.recentFiles,
-                                     save, saveAs, saveAuto, changeOutputDir,
+                                     save, saveAs, saveAuto, #changeOutputDir,
                                      exportAs,
                                      close,
                                      None,
@@ -1528,7 +1568,7 @@ class LabelmePlugin:
         if(len(self.imageList) <= 1):
             return
         mb = QtWidgets.QMessageBox
-        msg = '显示所有功能，只针对已经配准好的图像集, 确定需要显示所有图层吗?'
+        msg = '<显示所有>功能，只针对已经配准好的图像集, 确定需要显示所有图层吗?'
         answer = mb.question(self.mainWnd,
                              '继续显示?',
                              msg,
@@ -1828,6 +1868,10 @@ class LabelmePlugin:
         outdir = self.export_dialog.txtOutDir.text()
         output_json = osp.join(outdir, 'coco.json')
         labelme2coco(jsons, output_json)
+
+    def onOpenInExplorer(self):
+        if(self.lastOpenDir is not None):
+            os.startfile(self.lastOpenDir)
 
     def exportAsVOC(self, dir):
         print('\n\n\n*-------------------------------------export as VOC--------------------------------------------')
