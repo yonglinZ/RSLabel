@@ -122,7 +122,8 @@ class labelme2coco(object):
 
     def annotation(self, points, label, num):
         annotation = {}
-        annotation['segmentation'] = [list(np.asarray(points).flatten())]
+        segmentation =list(map(int,np.asarray(points).flatten()))
+        annotation['segmentation'] = [segmentation]
         annotation['iscrowd'] = 0
         annotation['image_id'] = num+1
         annotation['bbox'] = list(map(int, self.getbbox(points)))
@@ -143,12 +144,9 @@ class labelme2coco(object):
     def getbbox(self, points):
         polygons = points
         array = np.array(polygons).reshape(-1, 2)
-        print('* getbbox', array)
         left_top_c, left_top_r = np.min(array, 0)[0], np.min(array, 0)[1]
         right_bottom_c, right_bottom_r = np.max(
             array, 0)[0], np.max(array, 0)[1]
-        print('*bbox: {},{},{},{}'.format(left_top_c,
-                                          left_top_r, right_bottom_c, right_bottom_r))
         return [left_top_c, left_top_r, right_bottom_c-left_top_c, right_bottom_r-left_top_r]
 
     def mask2box(self, polygons):

@@ -58,7 +58,6 @@ class LabelmePlugin:
         self.grid_color = None
         self.grid_size = None 
         self.shortName = False 
-        print('*self.grid_size', self.grid_size)
 
         # Whether we need to save or not.
         self.dirty = False
@@ -67,9 +66,11 @@ class LabelmePlugin:
         self.output_dir = None
         self.supportedFmts = ['img','tif','tiff','png', 'jpg', 'ecw', 'gta', 'pix']
         self._noSelectionSlot = False
-
         self.imageWidth = 0
         self.imageHeight = 0
+
+
+
     def initGui(self):
         """Function initalizes GUI of the OSM Plugin.
         """
@@ -83,6 +84,18 @@ class LabelmePlugin:
    
         #Context Menus and cursor:
         self.canvasMenus = (QtWidgets.QMenu(), QtWidgets.QMenu())   
+        
+        # read labels  
+        self.labelLeafs = None 
+        self.labelLeafs = None 
+        try:
+            with open('./.label.json') as f:
+                data = json.load(f)
+                self.labelNodes = parseDict(data)
+                self.labelNodes.print()
+                self.labelLeafs = self.labelNodes.leafs()
+        except Exception as e:
+            print(e)
 
         # Main widgets and related state.
         self.labelDialog = LabelDialog(
@@ -116,6 +129,12 @@ class LabelmePlugin:
         self.fillColor = DEFAULT_FILL_COLOR
         self.otherData = {} 
        
+        #set grid size
+        self.grid_size = self.settings.value('grid_size')
+        if(self.grid_size is not None):
+            print('* load grid size configure')
+            self.iface.setGridSize(int(self.grid_size))
+
         # Populate the File menu dynamically.
         self.updateFileMenu()
         # Since loading the file may take some time,
@@ -657,10 +676,28 @@ class LabelmePlugin:
             self.editor.setFillColor(self.fillColor)
             self.canvas.update()
             self.setDirty()
+   
 
-    
-    def toggleKeepPrevMode(self):
-        self._config['keep_prev'] = not self._config['keep_prev']
+    def importLabelFile(self):
+        formats = ['*.json']
+        filters = "Label files (%s)" % ' '.join(formats)
+        filename = QtWidgets.QFileDialog.getOpenFileName(
+            self.mainWnd, '%s - import Label file' % __appname__,
+            './', filters)
+        filename, _ = filename
+        filename = str(filename)
+        if filename:
+            with open(filename) as f:
+                try:
+                    data = json.load(f)
+                    nodes = parseDict(data)
+                    print('***weps------------------')
+                    nodes.print()
+                except Exception as e:
+                    self.errorMessage('导入文件发生错误', '请检查json文件格式')
+                    return
+            shutil.copy(filename, './.label.json')
+                
 
     def deleteSelectedShape(self):
         yes, no = QtWidgets.QMessageBox.Yes, QtWidgets.QMessageBox.No
@@ -970,6 +1007,11 @@ class LabelmePlugin:
         if self._config['labels']:
             self.uniqLabelList.addItems(self._config['labels'])
             self.uniqLabelList.sortItems()
+
+        if self.labelLeafs:
+            self.uniqLabelList.addItems(self.labelLeafs)
+            self.uniqLabelList.sortItems()
+        
         self.label_dock = QtWidgets.QDockWidget(u'标签列表', self.mainWnd)
         self.label_dock.setObjectName(u'Label List')
         self.label_dock.setWidget(self.uniqLabelList)
@@ -1109,13 +1151,12 @@ class LabelmePlugin:
                         shortcuts['grid_size_color'], 'grid',
                         'Choose grid color')
 
-        toggle_keep_prev_mode = action(
-            'Keep Previous Annotation',
-            self.toggleKeepPrevMode,
-            shortcuts['toggle_keep_prev_mode'], None,
+        import_label_file = action(
+            '导入标签文件',
+            self.importLabelFile,
+            shortcuts['toggle_keep_prev_mode'], 'importLabel',
             'Toggle "keep pevious annotation" mode',
-            checkable=True)
-        toggle_keep_prev_mode.setChecked(self._config['keep_prev'])
+            checkable=False)
 
         createMode = action(
             '创建多边形',
@@ -1231,7 +1272,7 @@ class LabelmePlugin:
             save=save, saveAs=saveAs, open=open_, close=close,
             exportAs=exportAs,
             lineColor=color1, fillColor=color2,
-            toggleKeepPrevMode=toggle_keep_prev_mode,
+            import_label_file=import_label_file,
             delete=delete, edit=edit, copy=copy,
             undoLastPoint=undoLastPoint, undo=undo, 
             addPoint=addPoint,
@@ -1246,7 +1287,7 @@ class LabelmePlugin:
             fileMenuActions=(open_, opendir, save, saveAs, exportAs, close, quit),
             tool=(),
             editMenu=(edit, copy, delete, None, undo, #undoLastPoint,
-                      None, color1, color2, gridSzAndColor, None, toggle_keep_prev_mode),
+                      None, color1, color2, gridSzAndColor, None, import_label_file),
             # menu shown at right click
             menu=(
                 createMode,
@@ -1829,6 +1870,8 @@ class LabelmePlugin:
                 os.makedirs(osp.join(self.exportOutDir, 'AnnotationsVisualization'))
             except Exception:
                 print('*Creating dataset failed:', self.exportOutDir)
+        else:
+            os.makedirs(osp.join(self.exportOutDir, 'Annotations'))
 
         self.isTiled = False
         if(self.export_dialog.chkTiled.isChecked()):  #need to split to tiles
@@ -1864,10 +1907,60 @@ class LabelmePlugin:
         os.startfile(self.export_dialog.txtOutDir.text())
 
     def exportAsCOCO(self, dir):
+        if self.isTiled:
+            self.exportTiledResultAsCOCO(dir)
+        else:
+            self.exportNoTiledResultAsCOCO(dir)
+
+    def exportNoTiledResultAsCOCO(self, dir):
         jsons = glob.glob(dir + '/**/*.json', recursive=True)
         outdir = self.export_dialog.txtOutDir.text()
-        output_json = osp.join(outdir, 'coco.json')
-        labelme2coco(jsons, output_json)
+        for json in jsons:
+            js = [json]
+            output_json = osp.join(outdir, '{}.json'.format(my_basename(json)))
+            labelme2coco(js, output_json)
+            # move image files to Annotations folder
+            # find the image file to be move
+            exts = ['.tif','.env', '.pix', '.img', '.tiff', '.ecw', '.tga']
+            e = '.tif'
+            filePathWithoutExt = my_splitext(json)[0]
+            findImg = False
+            for ext in exts:
+                img_file = filePathWithoutExt + ext
+                if(osp.exists(img_file)):
+                    findImg = True
+                    e = ext
+                    break 
+            if findImg:
+                subFolder = osp.join(outdir, 'Annotations')
+                shutil.copy(img_file, subFolder)
+
+    def exportTiledResultAsCOCO(self, dir):
+        cds = childDir(dir)  #get next leve folder name. without path name
+        for child in cds:
+            jsons = glob.glob(osp.join(dir,child) + '/**/*.json', recursive=True)
+            outdir = self.export_dialog.txtOutDir.text()
+            output_json = osp.join(outdir, 'coco_{}.json'.format(child))
+            labelme2coco(jsons, output_json)
+            # move image files to Annotations folder
+            for json in jsons:
+                filePathWithoutExt = my_splitext(json)[0]
+                #for every json file, we create a folder in Annotations
+                subFolder = osp.join(outdir, 'Annotations', child)
+                if(not osp.exists(subFolder)):
+                    os.makedirs(subFolder)
+                #find the image file to be move
+                exts = ['.tif','.env', '.pix', '.img', '.tiff', '.ecw', '.tga']
+                e = '.tif'
+                findImg = False
+                for ext in exts:
+                    img_file = filePathWithoutExt + ext
+                    if(osp.exists(img_file)):
+                        findImg = True
+                        e = ext
+                        break 
+                if findImg:
+                    shutil.copy(img_file, subFolder)
 
     def onOpenInExplorer(self):
         if(self.lastOpenDir is not None):
@@ -1951,7 +2044,7 @@ class LabelmePlugin:
             colors = [] 
             unkown_class_type = False 
             for shape in data['shapes']:
-                if shape['shape_type'] != 'rectangle':
+                if shape['shape_type'] != 'rectangle' and shape['shape_type'] != 'polygon':
                     print('*Skipping shape: label={label}, shape_type={shape_type}'
                         .format(**shape))
                     continue
@@ -1962,7 +2055,11 @@ class LabelmePlugin:
                 except Exception as e:
                     unkown_class_type = True
                     break
-                (xmin_, ymin_), (xmax_, ymax_) = shape['points']
+                if(shape['shape_type'] == 'rectangle'):
+                    (xmin_, ymin_), (xmax_, ymax_) = shape['points']
+                elif(shape['shape_type'] == 'polygon'):
+                    (xmin_, ymin_), (xmax_, ymax_) = boundingBox(shape['points'])
+
                 #convert to image coordination here
                 xmin = (xmin_ - geoTrans[0]) / geoTrans[1]
                 ymin = (geoTrans[3] - ymin_) / -geoTrans[5]
@@ -2084,7 +2181,17 @@ def gdalCopy(src_filename, dst_filename):
     shutil.copy(src_filename, dst_filename)
     return w,h,d
 
+########################################################################################################
+#                                          Utils                                        
+########################################################################################################
 
+def my_basename(pathname):
+    """splitext for paths with directories that may contain dots."""
+    pathname = pathname.replace('\\', '/')
+    x = pathname.split('/')
+    path = x[-1]
+    ret, _ = my_splitext(path)
+    return ret
 
 
 def my_splitext(pathname):
@@ -2095,3 +2202,98 @@ def my_splitext(pathname):
         path = path + '.' + ext
     return path, x[-1]
 
+def boundingBox(points):
+    min_x, min_y = np.min(points, 0)[0], np.min(points, 0)[1]
+    max_x, max_y = np.max(points, 0)[0], np.max(points, 0)[1]
+    return (min_x, min_y), (max_x, max_y)
+
+def childDir(dir):
+    dirs = []
+    files = os.listdir(dir)
+    for f in files:
+        fullPathName = osp.join(dir,f)
+        if osp.isdir(fullPathName):
+            dirs.append(f)
+    return dirs
+
+class JsonNode(object):
+    def __init__(self, name = None):
+        if name is not None:
+            self.name = name
+        else:
+            self.name = None
+        self.children = []
+        self.parent = None
+
+    def setParent(self, p):
+        self.parent = p
+    
+    def getParent(self):
+        p = self.parent
+        while p.name is None:
+            p = p.parent
+        return p
+
+    def setName(self, name):
+        self.name = name
+
+    def addChild(self, c):
+        self.children.append(c)
+    
+    def print(self, level = 0):
+        if(self.name is not None):
+            print('-'*level + self.name)
+        else:
+            print('-'*level + 'No Name')
+        for c in self.children:
+            c.print(level+1)
+
+    def leafs(self):
+        ''' get all leaf node'''
+        ls = []
+        for c in self.children:
+            if (not c.children):
+                ls.append(c.name)
+            else:
+                u = c.leafs()
+                for x in u:
+                    ls.append(x)
+        return ls
+
+
+def parseList(data, parent):
+    for v in data:
+        value_is_list = isinstance(v, list)
+        value_is_dict = isinstance(v, dict)
+        value_is_str = isinstance(v, str)
+        if value_is_str:
+            node = JsonNode(v)
+            node.setParent(parent)
+            parent.addChild(node)
+        elif value_is_dict:
+            node = parseDict(v)
+            node.setParent(parent)
+            parent.addChild(node)
+    return  
+
+
+def parseDict(data, root = None):
+    root = JsonNode()
+    for key, value in data.items():
+        print('*key= ', key)
+        print('*value= ', value)
+        node = JsonNode(key)
+        value_is_list = isinstance(value, list)
+        value_is_dict = isinstance(value, dict)
+        value_is_str  = isinstance(value, str)
+        if(value_is_str):
+            child = JsonNode(name = value)
+            child.setParent(node)
+        elif value_is_dict:
+            child = parseDict(value)
+            child.setParent(node)
+            node.addChild(child)
+        elif value_is_list:
+            parseList(value,node)
+        root.addChild(node)
+    return root 

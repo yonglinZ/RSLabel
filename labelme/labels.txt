@@ -1,5 +1,4 @@
 __ignore__
 _background_
-º£¿Ú
-cloud
 river
+cloud
