@@ -85,18 +85,7 @@ class LabelmePlugin:
         #Context Menus and cursor:
         self.canvasMenus = (QtWidgets.QMenu(), QtWidgets.QMenu())   
         
-        # read labels  
-        self.labelLeafs = None 
-        self.labelLeafs = None 
-        try:
-            with open('./.label.json') as f:
-                data = json.load(f)
-                self.labelNodes = parseDict(data)
-                self.labelNodes.print()
-                self.labelLeafs = self.labelNodes.leafs()
-        except Exception as e:
-            print(e)
-
+     
         # Main widgets and related state.
         self.labelDialog = LabelDialog(
             parent=self.mainWnd,
@@ -247,7 +236,7 @@ class LabelmePlugin:
 
     def  editLabel(self, item=None):
         print('*editLabel')
-        if not self.editor.isEditing():
+        if (not self.editor.isEditing()) and (not self.editor.canBreak()):
             print('*editLabel, not editing. return')
             return
         item = item if item else self.currentItem()
@@ -315,7 +304,7 @@ class LabelmePlugin:
             shape = LabelmeShape(label, shape_type)
             for x, y in points:
                 print('*({},{})'.format(x,y))
-                shape.addPoint(QtCore.QPoint(x, y))
+                shape.addPoint(QtCore.QPointF(x, y))
             shape.close()
             s.append(shape)
             if line_color:
@@ -1006,10 +995,6 @@ class LabelmePlugin:
             "Press 'Esc' to deselect.")
         if self._config['labels']:
             self.uniqLabelList.addItems(self._config['labels'])
-            self.uniqLabelList.sortItems()
-
-        if self.labelLeafs:
-            self.uniqLabelList.addItems(self.labelLeafs)
             self.uniqLabelList.sortItems()
         
         self.label_dock = QtWidgets.QDockWidget(u'标签列表', self.mainWnd)
@@ -2261,20 +2246,6 @@ class JsonNode(object):
         return ls
 
 
-def parseList(data, parent):
-    for v in data:
-        value_is_list = isinstance(v, list)
-        value_is_dict = isinstance(v, dict)
-        value_is_str = isinstance(v, str)
-        if value_is_str:
-            node = JsonNode(v)
-            node.setParent(parent)
-            parent.addChild(node)
-        elif value_is_dict:
-            node = parseDict(v)
-            node.setParent(parent)
-            parent.addChild(node)
-    return  
 
 
 def parseDict(data, root = None):
