@@ -41,9 +41,9 @@ for big images(larger than 300M), building overviews is highly recommended.
 -	Support Very large RS IMAGE
 -	Supporting infinite zooming
 
-##	Next to do
--	export the label result as coco/voc dataset formta
--   support **geo** coordination and **image** coordination
+##	the slant rectangle
+this tool is very convinient to label object with an angle. look that
+![](https://github.com/enigma19971/RSLabel/blob/master/slantRect.PNG "build overview")
 
 
 ##	contact us
