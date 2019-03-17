@@ -1178,7 +1178,7 @@ class LabelmePlugin:
         createSlantRectMode = action(
             '创建倾斜矩形',
             lambda: self.toggleDrawMode(False, createMode='slantRectangle'),
-            shortcuts['create_slant_rectangle'],
+            shortcuts['create_point'],
             'objects',
             'Start drawing slant rectangle',
             enabled=False,
