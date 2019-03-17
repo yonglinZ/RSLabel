@@ -550,7 +550,7 @@ class LabelmePlugin:
             self.actions.createRectangleMode,
             self.actions.createCircleMode,
             self.actions.createLineMode,
-            self.actions.createPointMode,
+            self.actions.createSlantRectMode,
             self.actions.createLineStripMode,
             self.actions.editMode,
         )
@@ -868,7 +868,7 @@ class LabelmePlugin:
         self.actions.createRectangleMode.setEnabled(True)
         self.actions.createCircleMode.setEnabled(True)
         self.actions.createLineMode.setEnabled(True)
-        self.actions.createPointMode.setEnabled(True)
+        self.actions.createSlantRectMode.setEnabled(True)
         self.actions.createLineStripMode.setEnabled(True)
         title = __appname__
         if self.filename is not None:
@@ -928,7 +928,7 @@ class LabelmePlugin:
             self.actions.createRectangleMode.setEnabled(True)
             self.actions.createCircleMode.setEnabled(True)
             self.actions.createLineMode.setEnabled(True)
-            self.actions.createPointMode.setEnabled(True)
+            self.actions.createSlantRectMode.setEnabled(True)
             self.actions.createLineStripMode.setEnabled(True)
         else:
             if createMode == 'polygon':
@@ -936,42 +936,42 @@ class LabelmePlugin:
                 self.actions.createRectangleMode.setEnabled(True)
                 self.actions.createCircleMode.setEnabled(True)
                 self.actions.createLineMode.setEnabled(True)
-                self.actions.createPointMode.setEnabled(True)
+                self.actions.createSlantRectMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
             elif createMode == 'rectangle':
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(False)
                 self.actions.createCircleMode.setEnabled(True)
                 self.actions.createLineMode.setEnabled(True)
-                self.actions.createPointMode.setEnabled(True)
+                self.actions.createSlantRectMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
             elif createMode == 'line':
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
                 self.actions.createCircleMode.setEnabled(True)
                 self.actions.createLineMode.setEnabled(False)
-                self.actions.createPointMode.setEnabled(True)
+                self.actions.createSlantRectMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
-            elif createMode == 'point':
+            elif createMode == 'slantRectangle':
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
                 self.actions.createCircleMode.setEnabled(True)
                 self.actions.createLineMode.setEnabled(True)
-                self.actions.createPointMode.setEnabled(False)
+                self.actions.createSlantRectMode.setEnabled(False)
                 self.actions.createLineStripMode.setEnabled(True)
             elif createMode == "circle":
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
                 self.actions.createCircleMode.setEnabled(False)
                 self.actions.createLineMode.setEnabled(True)
-                self.actions.createPointMode.setEnabled(True)
+                self.actions.createSlantRectMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
             elif createMode == "linestrip":
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
                 self.actions.createCircleMode.setEnabled(True)
                 self.actions.createLineMode.setEnabled(True)
-                self.actions.createPointMode.setEnabled(True)
+                self.actions.createSlantRectMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(False)
             else:
                 raise ValueError('Unsupported createMode: %s' % createMode)
@@ -1175,12 +1175,12 @@ class LabelmePlugin:
             'Start drawing lines',
             enabled=False,
         )
-        createPointMode = action(
-            '创建点',
-            lambda: self.toggleDrawMode(False, createMode='point'),
-            shortcuts['create_point'],
+        createSlantRectMode = action(
+            '创建倾斜矩形',
+            lambda: self.toggleDrawMode(False, createMode='slantRectangle'),
+            shortcuts['create_slant_rectangle'],
             'objects',
-            'Start drawing points',
+            'Start drawing slant rectangle',
             enabled=False,
         )
         createLineStripMode = action(
@@ -1265,7 +1265,7 @@ class LabelmePlugin:
             createRectangleMode=createRectangleMode,
             createCircleMode=createCircleMode,
             createLineMode=createLineMode,
-            createPointMode=createPointMode,
+            createSlantRectMode=createSlantRectMode ,
             createLineStripMode=createLineStripMode,
             shapeLineColor=shapeLineColor, shapeFillColor=shapeFillColor,
             openNextImg=openNextImg, openPrevImg=openPrevImg,
@@ -1279,7 +1279,7 @@ class LabelmePlugin:
                 createRectangleMode,
                 createCircleMode,
                 createLineMode,
-                createPointMode,
+                createSlantRectMode,
                 createLineStripMode,
                 editMode,
                 edit,
@@ -1297,7 +1297,7 @@ class LabelmePlugin:
                 createRectangleMode,
                 createCircleMode,
                 createLineMode,
-                createPointMode,
+                createSlantRectMode,
                 createLineStripMode,
                 editMode,
             ),
@@ -1611,7 +1611,7 @@ class LabelmePlugin:
             self.actions.createRectangleMode.setEnabled(False)
             self.actions.createCircleMode.setEnabled(False)
             self.actions.createLineMode.setEnabled(False)
-            self.actions.createPointMode.setEnabled(False)
+            self.actions.createSlantRectMode.setEnabled(False)
             self.actions.createLineStripMode.setEnabled(False)
             self.actions.editMode.setEnabled(False)
         else:
@@ -1757,7 +1757,7 @@ class LabelmePlugin:
                                         copyS = copy.deepcopy(s)
                                         copyS['points'] = [UL,LR]
                                         shapes.append(copyS)                                        
-                                elif(shape_type == 'polygon'):
+                                elif(shape_type == 'polygon' or shape_type=='slantRectangle' ):
                                     tilePolygon = QtGui.QPolygonF(tileRect)
                                     ps = []
                                     for pnt in points:
@@ -2029,7 +2029,7 @@ class LabelmePlugin:
             colors = [] 
             unkown_class_type = False 
             for shape in data['shapes']:
-                if shape['shape_type'] != 'rectangle' and shape['shape_type'] != 'polygon':
+                if shape['shape_type'] != 'rectangle' and shape['shape_type'] != 'polygon' and shape['shape_type'] != 'slantRectangle':
                     print('*Skipping shape: label={label}, shape_type={shape_type}'
                         .format(**shape))
                     continue
@@ -2043,6 +2043,8 @@ class LabelmePlugin:
                 if(shape['shape_type'] == 'rectangle'):
                     (xmin_, ymin_), (xmax_, ymax_) = shape['points']
                 elif(shape['shape_type'] == 'polygon'):
+                    (xmin_, ymin_), (xmax_, ymax_) = boundingBox(shape['points'])
+                elif(shape['shape_type'] == 'slantRectangle'):
                     (xmin_, ymin_), (xmax_, ymax_) = boundingBox(shape['points'])
 
                 #convert to image coordination here
