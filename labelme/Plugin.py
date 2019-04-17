@@ -689,6 +689,11 @@ class LabelmePlugin:
                 
 
     def deleteSelectedShape(self):
+        hasSelectedShape = self.editor.hasSelectedShape()
+        if(not hasSelectedShape):
+            self.errorMessage('没有选中的图形',
+                                '请选择图形后再执行删除操作')
+            return
         yes, no = QtWidgets.QMessageBox.Yes, QtWidgets.QMessageBox.No
         #msg = 'You are about to permanently delete this polygon, ' \
         #      'proceed anyway?'
@@ -1063,10 +1068,12 @@ class LabelmePlugin:
             for i in range(self.fileListWidget.count()):
                 item = self.fileListWidget.item(i)
                 item.setText(self.short_long_name[item.text()])
+            self.noPath.setText('隐藏路径')
         else:
             for i in range(self.fileListWidget.count()):
                 item = self.fileListWidget.item(i)
                 item.setText(osp.basename(item.text()))
+            self.noPath.setText('显示路径')
         print('* self.shortName', self.shortName)
 
     # Actions and menus
@@ -1435,13 +1442,14 @@ class LabelmePlugin:
 
     def scanAllImages(self, folderPath):
         extensions = self.supportedFmts
-        images = []
-
+        images = []        
         for root, dirs, files in os.walk(folderPath):
             for file in files:
                 if file.lower().endswith(tuple(extensions)):
                     relativePath = osp.join(root, file)
-                    images.append(relativePath)
+                    images.append(relativePath)            
+        images = set(images)
+        images = list(images)
         images.sort(key=lambda x: x.lower())
         return images
 
@@ -1673,29 +1681,30 @@ class LabelmePlugin:
         jsons = glob.glob(self.lastOpenDir + '/**/*.json', recursive=True)
         jsonNum = len(jsons)
         self.labels = set()
+        exts = ['.tif','.env', '.pix', '.img', '.tiff', '.ecw', '.tga', '.jpg']
+        extension = '.tif'
         for i, label_file in enumerate(jsons):
             #base = osp.splitext(osp.basename(label_file))[0]
             base = my_splitext(osp.basename(label_file))[0]
             filePathWithoutExt = my_splitext(label_file)[0]
-            exts = ['.tif','.env', '.pix', '.img', '.tiff', '.ecw', '.tga']
-            e = '.tif'
             findImg = False
             for ext in exts:
                 img_file = filePathWithoutExt + ext
                 if(osp.exists(img_file)):
                     findImg = True
-                    e = ext
+                    extension = ext
                     break
             if (findImg): #the json file has raster
+                print('*',extension)
                 tileSz = int(self.export_dialog.txtTileSize.text())      
                 outDir = self.export_dialog.txtOutDir.text()
                 outDir = osp.join(outDir , 'tiles', base)
                 if(not osp.exists(outDir)):
                     os.makedirs(outDir)
                 self.statusBar().showMessage('正在处理 %s' % img_file)
+                validBlocks = []
                 #load json
                 print('* begin to load json file', label_file)
-                validBlocks = []
                 with open(label_file) as f:
                     data = json.load(f)  #data is json file's content
                     imagePath = data['imagePath']
@@ -1721,6 +1730,7 @@ class LabelmePlugin:
                     mapfunc = functools.partial(img2map_p, geoTrans)
                     tile_x_count = math.ceil(imageWidth/tileSz)
                     tile_y_count = math.ceil(imageHeight/tileSz)
+                    print('*',extension)
                     print('* @|@json load, image width is {}, image height is {}, tile_x_count is {}, tile_y_count is {}'.format(imageWidth, imageHeight, tile_x_count,tile_y_count))
                     for row in range(tile_y_count):
                         for col in range(tile_x_count):
@@ -1774,8 +1784,12 @@ class LabelmePlugin:
                                             pts = list(map(mapfunc, pts))
                                         copyS['points'] = pts 
                                         shapes.append(copyS) 
+                            print('*',self.labels)
+                            if(self.labels is None):
+                                continue
                             label_file_t = osp.join(outDir, '{}_{}_{}.{}'.format(base, row, col, 'json'))
-                            imagePath = '{}_{}_{}.{}'.format(base, row, col, e[1:])
+                            print('*',extension)
+                            imagePath = '{}_{}_{}.{}'.format(base, row, col, extension[1:])
                             if (len(shapes) == 0):
                                 continue
                             validBlocks.append(QtCore.QPoint(col, row))
@@ -1811,8 +1825,6 @@ class LabelmePlugin:
                                 return
                 if(validBlocks):
                     self.iface.gdal2Tile(img_file,tileSz, outDir, validBlocks)
-            print('*',self.labels)
-            assert self.labels
             labels_file = osp.join(here, 'labels.txt')
             with open(labels_file,'w') as f:
                 f.write('__ignore__\n')
@@ -1906,7 +1918,7 @@ class LabelmePlugin:
             labelme2coco(js, output_json)
             # move image files to Annotations folder
             # find the image file to be move
-            exts = ['.tif','.env', '.pix', '.img', '.tiff', '.ecw', '.tga']
+            exts = ['.tif','.env', '.pix', '.img', '.tiff', '.ecw', '.tga', '.jpg']
             e = '.tif'
             filePathWithoutExt = my_splitext(json)[0]
             findImg = False
@@ -1935,7 +1947,7 @@ class LabelmePlugin:
                 if(not osp.exists(subFolder)):
                     os.makedirs(subFolder)
                 #find the image file to be move
-                exts = ['.tif','.env', '.pix', '.img', '.tiff', '.ecw', '.tga']
+                exts = ['.tif','.env', '.pix', '.img', '.tiff', '.ecw', '.tga', '.jpg']
                 e = '.tif'
                 findImg = False
                 for ext in exts:
@@ -2029,7 +2041,9 @@ class LabelmePlugin:
             colors = [] 
             unkown_class_type = False 
             for shape in data['shapes']:
-                if shape['shape_type'] != 'rectangle' and shape['shape_type'] != 'polygon' and shape['shape_type'] != 'slantRectangle':
+                if shape['shape_type'] != 'rectangle' \
+                    and shape['shape_type'] != 'polygon' \
+                    and shape['shape_type'] != 'slantRectangle':
                     print('*Skipping shape: label={label}, shape_type={shape_type}'
                         .format(**shape))
                     continue
@@ -2052,6 +2066,11 @@ class LabelmePlugin:
                 ymin = (geoTrans[3] - ymin_) / -geoTrans[5]
                 xmax = (xmax_ - geoTrans[0]) / geoTrans[1]
                 ymax = (geoTrans[3] - ymax_) / -geoTrans[5]
+                if xmax < xmin:
+                    xmax, xmin = xmin, xmax
+                if ymax < ymin:
+                    ymax, ymin = ymin, ymax
+
                 bboxes.append(QRect(QPoint(xmin,ymin),QPoint(xmax,ymax))) 
                 labels.append(class_id)
                 xml.append(
@@ -2093,7 +2112,7 @@ class LabelmePlugin:
                     f.write('未分块的输入文件不支持draw instance操作')
             #write xml
             with open(out_xml_file, 'wb') as f:
-                f.write(lxml.etree.tostring(xml, pretty_print=True))
+                f.write(lxml.etree.tostring(xml, encoding='utf-8' ,pretty_print=True))
             self.iface.setProgress((int)((i+1)*100.0/jsonNum))
             i = i + 1
 

@@ -67,6 +67,7 @@ class LabelDialog(QtWidgets.QDialog):
             self.labelList.setDragDropMode(
                 QtWidgets.QAbstractItemView.InternalMove)
         self.labelList.currentItemChanged.connect(self.labelSelected)
+        self.labelList.itemDoubleClicked.connect(self.doubleClicked)
         self.edit.setListWidget(self.labelList)
         layout.addWidget(self.labelList)
         self.setLayout(layout)
@@ -133,6 +134,16 @@ class LabelDialog(QtWidgets.QDialog):
         if move:
             self.move(QtGui.QCursor.pos())
         return self.edit.text() if self.exec_() else None
+
+    def doubleClicked(self):
+        print('*selected item is', self.labelList.currentItem().text())
+        text = self.edit.text()
+        if hasattr(text, 'strip'):
+            text = text.strip()
+        else:
+            text = text.trimmed()
+        if text:
+            self.accept()
 
 
 if __name__ == '__main__':
