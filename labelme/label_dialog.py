@@ -49,7 +49,16 @@ class LabelDialog(QtWidgets.QDialog):
         bb.button(bb.Cancel).setIcon(labelme.utils.newIcon('undo'))
         bb.accepted.connect(self.validate)
         bb.rejected.connect(self.reject)
-        layout.addWidget(bb)
+        hlayout = QtWidgets.QHBoxLayout()
+        label = QtWidgets.QLabel('置信度')
+        self.probability = QtWidgets.QSpinBox()
+        self.probability.setMaximum(10)
+        self.probability.setMinimum(0)
+        self.probability.setValue(10)
+        hlayout.addWidget(label)
+        hlayout.addWidget(self.probability)
+        hlayout.addWidget(bb)
+        layout.addLayout(hlayout)
         # label_list
         self.labelList = QtWidgets.QListWidget()
         if self._fit_to_content['row']:
@@ -112,7 +121,7 @@ class LabelDialog(QtWidgets.QDialog):
             text = text.trimmed()
         self.edit.setText(text)
 
-    def popUp(self, text=None, move=True):
+    def popUp(self, text=None, probability=None, move=True):
         if self._fit_to_content['row']:
             self.labelList.setMinimumHeight(
                 self.labelList.sizeHintForRow(0) * self.labelList.count() + 2)
@@ -133,7 +142,9 @@ class LabelDialog(QtWidgets.QDialog):
         self.edit.setFocus(QtCore.Qt.PopupFocusReason)
         if move:
             self.move(QtGui.QCursor.pos())
-        return self.edit.text() if self.exec_() else None
+        if probability is not None:
+            self.probability.setValue(probability)
+        return (self.edit.text(), self.probability.value()) if self.exec_() else None
 
     def doubleClicked(self):
         print('*selected item is', self.labelList.currentItem().text())

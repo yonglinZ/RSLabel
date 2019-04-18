@@ -55,6 +55,7 @@ class LabelFile(object):
                     s['line_color'],
                     s['fill_color'],
                     s.get('shape_type', 'polygon'),
+                    s['probability'],
                 )
                 for s in data['shapes']
             )

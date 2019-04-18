@@ -217,7 +217,10 @@ class LabelmePlugin:
         if items:
             text = items[0].text()
         if self._config['display_label_popup'] or not text:
-            text = self.labelDialog.popUp(text)
+            result = self.labelDialog.popUp(text, 10)
+        if result is None:
+            return
+        text , prob = result
         if text is not None and not self.validateLabel(text):
             self.errorMessage('无效的标签',
                               "Invalid label '{}' with validation type '{}'"
@@ -227,7 +230,9 @@ class LabelmePlugin:
             self.editor.undoLastLine()
             #self.editor.shapesBackups.pop()
         else:
-            self.addLabel(self.editor.setLastLabel(text))
+            shape = self.editor.setLastLabel(text)
+            shape.setProbability(prob)
+            self.addLabel(shape)
             self.editor.commit()
             self.actions.editMode.setEnabled(True)
             self.actions.undoLastPoint.setEnabled(False)
@@ -240,15 +245,18 @@ class LabelmePlugin:
             print('*editLabel, not editing. return')
             return
         item = item if item else self.currentItem()
-        text = self.labelDialog.popUp(item.text())
-        if text is None:
+        shape = self.labelList.get_shape_from_item(item)
+        result = self.labelDialog.popUp(item.text(),shape.getProbability())
+        if result is None:
             return
+        text , prob = result
         if not self.validateLabel(text):
             self.errorMessage('Invalid label',
                               "Invalid label '{}' with validation type '{}'"
                               .format(text, self._config['validate_label']))
             return
         item.setText(text)
+        shape.setProbability(prob)
         self.setDirty()
         if not self.uniqLabelList.findItems(text, Qt.MatchExactly):
             self.uniqLabelList.addItem(text)
@@ -300,8 +308,9 @@ class LabelmePlugin:
 
     def loadLabels(self, shapes):
         s = []
-        for label, points, line_color, fill_color, shape_type in shapes:
+        for label, points, line_color, fill_color, shape_type, probability in shapes:
             shape = LabelmeShape(label, shape_type)
+            shape.setProbability(probability)
             for x, y in points:
                 print('*({},{})'.format(x,y))
                 shape.addPoint(QtCore.QPointF(x, y))
@@ -336,6 +345,7 @@ class LabelmePlugin:
                 fill_color=s.fill_color.getRgb()
                 if s.fill_color != self.fillColor else None,
                 points=[(p.x(), p.y()) for p in s.thePoints],
+                probability = s.getProbability(),
                 shape_type=s.getType(),
             )
 
@@ -2079,6 +2089,7 @@ class LabelmePlugin:
                         maker.pose('Unspecified'),
                         maker.truncated('0'),
                         maker.difficult('0'),
+                        maker.probability(str(shape['probability'])),
                         maker.bndbox(
                             maker.xmin(str(int(xmin))),
                             maker.ymin(str(int(ymin))),

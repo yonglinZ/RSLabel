@@ -31,10 +31,12 @@ def img2map_p(geoTrans, p):
     v = geoTrans[3] + geoTrans[5]*p[1]
     return u, v
 
+
 def offset(tileSz, row, col, x, y):
     u = x - col * tileSz
-    v = (row + 1) * tileSz - y 
+    v = (row + 1) * tileSz - y
     return u, v
+
 
 def offset_p(tileSz, row, col, p):
     u = p[0] - col * tileSz
@@ -91,10 +93,11 @@ class labelme2coco(object):
                             self.categories.append(self.categorie(label))
                             self.labels.append(label[0])
                     points = shape['points']
+                    prob = shape['probability']
                     # convert to image coord
                     points = list(map(mapfunc, points))
                     self.annotations.append(
-                        self.annotation(points, label, num))
+                        self.annotation(points, label, prob, num))
                     self.annID += 1
 
     def image(self, data, num):
@@ -120,15 +123,16 @@ class labelme2coco(object):
             categorie['name'] = label[0]
         return categorie
 
-    def annotation(self, points, label, num):
+    def annotation(self, points, label, prob, num):
         annotation = {}
-        segmentation =list(map(int,np.asarray(points).flatten()))
+        segmentation = list(map(int, np.asarray(points).flatten()))
         annotation['segmentation'] = [segmentation]
         annotation['iscrowd'] = 0
         annotation['image_id'] = num+1
         annotation['bbox'] = list(map(int, self.getbbox(points)))
         annotation['category_id'] = self.getcatid(label)
         annotation['id'] = self.annID
+        annotation['probability'] = prob
         return annotation
 
     def getcatid(self, label):
