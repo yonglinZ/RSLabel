@@ -5,6 +5,7 @@ SelectedBands="2,2,2"
 ShowNullPixel=1
 ="======"
 BuildPyramidDialog_ComputeStatistics=1
+borderWidth=4
 
 [MainWindow]
 geometry=@ByteArray(\x1\xd9\xd0\xcb\0\x2\0\0\0\0\0\x90\0\0\0\x31\0\0\x6\xe8\0\0\x3\xbd\0\0\0\x98\0\0\0P\0\0\x6\xe0\0\0\x3\xb5\0\0\0\0\0\0\0\0\a\x80)
