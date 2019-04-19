@@ -17,6 +17,9 @@ we provide a package
 
 After you download and unzip to you folder. you can the RSLabel.exe
 
+or you can download the binary from here
+[rslabel](https://pan.baidu.com/s/1k-SpnPownRfTyqgu2J9zPA)   the extraction code is u30z
+
 ##  get started!
 - build overviews for images.  
 for big images(larger than 300M), building overviews is highly recommended.  
@@ -47,7 +50,7 @@ this tool is very convinient to label object with an angle. look that
 
 ##	export the result as VOC or COCO format
 you can export the result as VOC or COCO dataset's format , and use tensorflow or other deep learning framework to train the data.
-![](https://github.com/enigma19971/RSLabel/blob/master/exportas.PNG "export as VOC")
+![](https://github.com/enigma19971/RSLabel/blob/master/exportas.PNG"export as VOC")
 
 ##	contact us
 weixin  714601476
