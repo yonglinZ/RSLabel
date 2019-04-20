@@ -50,7 +50,7 @@ this tool is very convinient to label object with an angle. look that
 
 ##	export the result as VOC or COCO format
 you can export the result as VOC or COCO dataset's format , and use tensorflow or other deep learning framework to train the data.
-![](https://github.com/enigma19971/RSLabel/blob/master/exportas.PNG"export as VOC")
+![](https://github.com/enigma19971/RSLabel/blob/master/exportas.PNG "export as VOC")
 
 ##	contact us
 weixin  714601476
