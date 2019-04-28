@@ -1,5 +1,11 @@
 {
     "python.linting.pylintEnabled": false,
     "python.pythonPath": "C:\\Users\\xiex\\AppData\\Local\\conda\\conda\\envs\\PyQt5\\python.exe",
-    "python.formatting.provider": "autopep8"
+    "python.formatting.provider": "autopep8",
+    "files.associations": {
+        "*.py": "python",
+        "vector": "cpp",
+        "xstring": "cpp",
+        "xutility": "cpp"
+    }
 }

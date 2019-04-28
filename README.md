@@ -15,10 +15,10 @@ we provide a package
 
 [python3.6 + PyGdal + PyQT5](https://pan.baidu.com/s/1h4soOEfQGFiTA88H1b8yuw)
 
-After you download and unzip to you folder. you can the RSLabel.exe
+After you download and unzip to you folder. you can run the RSLabel.exe
 
 or you can download the binary from here
-[rslabel](https://pan.baidu.com/s/1k-SpnPownRfTyqgu2J9zPA)   the extraction code is u30z
+[rslabel-install](https://pan.baidu.com/s/1Eu3-DGivSVMUfGeexfCF8A)   the extraction code is **8tua**
 
 ##  get started!
 - build overviews for images.  
