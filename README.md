@@ -21,8 +21,8 @@ or you can download the binary from here
 [rslabel-install](https://pan.baidu.com/s/1Eu3-DGivSVMUfGeexfCF8A)   the extraction code is **8tua**
 
 ##  get started!
-- **build overviews for images.  (it is strongly recommented)**
-for big images(larger than 300M), building overviews is highly recommended.  
+- build overviews for images.  
+**for big images(larger than 300M), building overviews is highly recommended.**
 ![](https://github.com/enigma19971/RSLabel/blob/master/build-overview.PNG "build overview")
 
   you can chose build overviews for single file or a folder
